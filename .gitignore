@@ -38,14 +38,6 @@ Generated Files
 AppPackages
 *.hps
 
-# Ignore files build by ndk and eclipse
-libs/
-bin/
-obj/
-gen/
-assets/
-local.properties
-
 # Ignore files build by xcode
 *.mode*v*
 *.pbxuser
