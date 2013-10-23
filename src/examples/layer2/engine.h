@@ -116,6 +116,8 @@ namespace octet {
         case 5: filename = "external/Arteria3d/ElvenMale/ElevenMaleKnight_blender.dae"; break;
         case 6: filename = "external/Arteria3d/arteria3d_tropicalpack/flowers/flower%202.dae"; break; 
         case 7: filename = "assets/plane.dae"; break;
+        case 8: filename = "external/Arteria3dPirateR1/Pirate.dae"; break;
+        case 9: filename = "external/WhiteHorse/SingleTrack Animations/DAE/HorseB(White).dae"; break;
       }
 
       load_file(filename);

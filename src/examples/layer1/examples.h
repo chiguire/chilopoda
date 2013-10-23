@@ -20,6 +20,7 @@
 #include "duck/duck_app.h"
 #include "bump/bump_app.h"
 #include "physics/physics_app.h"
+#include "ciro/ciro_app.h"
 
 
 namespace octet {
@@ -34,6 +35,7 @@ namespace octet {
     else if (!strcmp(name, "duck")) return new duck_app(argc, argv);       //  duck sample: continue here to learn how to load collada geometry
     else if (!strcmp(name, "bump")) return new bump_app(argc, argv);       //  bump map sample: continue here to learn how to draw bump mapped textures
     else if (!strcmp(name, "physics")) return new physics_app(argc, argv); //  physics sample: continue here to learn how to annimate using physics
+    else if (!strcmp(name, "ciro")) return new ciro_app(argc, argv);       //  game project: :-D
     else return 0;
   }
 
@@ -43,7 +45,7 @@ namespace octet {
 
     if (argc == 1) {
       printf("running triangle... Why not try texture, gif, ping, cube, duck, bump or physics?\n");
-      app *myapp = app_factory("triangle", argc, argv);
+      app *myapp = app_factory("ciro", argc, argv);
       // if you can't edit the debug arguments,
       // change the string above to another of the examples.
       myapp->init();

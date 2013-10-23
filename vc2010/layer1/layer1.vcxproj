@@ -21,6 +21,7 @@
     <ClInclude Include="..\..\src\containers\string.h" />
     <ClInclude Include="..\..\src\examples\layer1\angry_box2d\angry_box2d_app.h" />
     <ClInclude Include="..\..\src\examples\layer1\bump\bump_app.h" />
+    <ClInclude Include="..\..\src\examples\layer1\ciro\ciro_app.h" />
     <ClInclude Include="..\..\src\examples\layer1\cube\cube_app.h" />
     <ClInclude Include="..\..\src\examples\layer1\duck\duck_app.h" />
     <ClInclude Include="..\..\src\examples\layer1\examples.h" />
