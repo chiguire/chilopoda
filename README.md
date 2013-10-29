@@ -1,9 +1,9 @@
 chilopoda
 =========
 
-By: Ciro Duran <ciro.duran@gmail.com>
+By: Ciro Duran <ciro.duran@gmail.com>  
 Made with Octet Game Framework, designed and implemented by Andy Thomason
-<http://sourceforge.net/projects/octetframework/>
+<[http://sourceforge.net/projects/octetframework/]http://sourceforge.net/projects/octetframework/>  
 October-November 2013
 
 Chilopoda is a Centipede clone (google Atari Centipede for more information). The game 
