@@ -193,8 +193,11 @@
     <ClInclude Include="..\..\src\examples\layer1\angry_box2d\angry_box2d_app.h">
       <Filter>Source Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\src\examples\layer1\ciro\ciro_app.h">
+    <ClInclude Include="..\..\src\examples\layer1\ciro\chilopoda.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\src\shaders\texture_palette_shader.h">
+      <Filter>octet\shaders</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
