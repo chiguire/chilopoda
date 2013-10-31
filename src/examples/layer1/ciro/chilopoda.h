@@ -9,7 +9,6 @@
 
 namespace octet {
   class chilo_sprite {
-    // where is our box (overkill for a ping game!)
     mat4t modelToWorld;
 
     // half the width of the box
@@ -21,60 +20,60 @@ namespace octet {
     // what texture is on our sprite?
     int texture;
 
-    // uvs are derived fromn positions with these scales.
-    float uscale;
-    float vscale;
-    float uoffset;
-    float voffset;
-
     bool enabled;
 
-  public:
-    
-    float color1[3];
-    float color2[3];
-    float color3[3];
 
+  public:
+    float x;
+    float y;
+    float rotation;
 
     chilo_sprite() { }
 
     void init(
       float x, float y, float w, float h,
-      int _texture, float uscale_ = 1.0f, float vscale_ = 1.0f, float uoffset_ = 0.5f, float voffset_ = 0.5f
+      int _texture
     ) {
       modelToWorld.loadIdentity();
-      modelToWorld.translate(x, y, 0);
+
+      this->x = x;
+      this->y = y;
+      this->rotation = 0;
 
       halfHeight = h * 0.5f;
       halfWidth = w * 0.5f;
 
       texture = _texture;
       enabled = true;
-      uscale = uscale_;
-      vscale = vscale_;
-      uoffset = uoffset_;
-      voffset = voffset_;
-
-      color1[0] = color1[1] = color1[2] = 1.0f;
-      color2[0] = color2[1] = color2[2] = 1.0f;
-      color3[0] = color3[1] = color3[2] = 1.0f;
     }
 
-    void render(texture_palette_shader &shader, mat4t &cameraToWorld) {
+    void render(texture_palette_shader &shader, mat4t &cameraToWorld, float *color1, float *color2, float *color3, float alpha=1.0f) {
+
+      if (!texture) return;
+
+      modelToWorld.loadIdentity();
+      modelToWorld.rotate(rotation, 0, 0, 1);
+      modelToWorld.translate(x, y, 0);
+
       // build a projection matrix: model -> world -> camera -> projection
       // the projection space is the cube -1 <= x/w, y/w, z/w <= 1
       mat4t modelToProjection = mat4t::build_projection_matrix(modelToWorld, cameraToWorld);
 
+      glActiveTexture(GL_TEXTURE0);
+      glBindTexture(GL_TEXTURE_2D, texture);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
       // set up the uniforms for the shader
-      shader.render(modelToProjection, 0, color1, color2, color3);
+      shader.render(modelToProjection, 0, color1, color2, color3, alpha);
 
       // this is an array of the positions of the corners of the box in 3D
       // a straight "float" here means this array is being generated here at runtime.
       float vertices[] = {
-        -halfWidth, -halfHeight, -halfWidth * uscale + uoffset, -halfHeight * vscale + voffset,
-         halfWidth, -halfHeight,  halfWidth * uscale + uoffset, -halfHeight * vscale + voffset, 
-         halfWidth,  halfHeight,  halfWidth * uscale + uoffset,  halfHeight * vscale + voffset,
-        -halfWidth,  halfHeight, -halfWidth * uscale + uoffset,  halfHeight * vscale + voffset,
+        -halfWidth, -halfHeight, 0.0f, 0.0f, //-halfWidth * uscale + uoffset, -halfHeight * vscale + voffset,
+         halfWidth, -halfHeight, 1.0f, 0.0f, // halfWidth * uscale + uoffset, -halfHeight * vscale + voffset, 
+         halfWidth,  halfHeight, 1.0f, 1.0f,// halfWidth * uscale + uoffset,  halfHeight * vscale + voffset,
+        -halfWidth,  halfHeight, 0.0f, 1.0f //-halfWidth * uscale + uoffset,  halfHeight * vscale + voffset,
       };
 
       // attribute_pos (=0) is position of each corner
@@ -87,11 +86,7 @@ namespace octet {
     
       // finally, draw the box (4 vertices)
       glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
-    }
 
-    // move the object
-    void translate(float x, float y) {
-      modelToWorld.translate(x, y, 0);
     }
 
     // position the object relative to another.
@@ -121,9 +116,13 @@ namespace octet {
     bool &is_enabled() {
       return enabled;
     }
+
   };
 
   class chilopoda_app : public octet::app {
+
+    const float SHIP_SPEED;
+
     // Matrix to transform points in our camera space to the world.
     // This lets us move our camera
     mat4t cameraToWorld;
@@ -144,25 +143,29 @@ namespace octet {
     int score;
 
     // game objects
+    chilo_sprite grid;
     chilo_sprite player;
     dynarray<chilo_sprite> fungiGroup;
     dynarray<chilo_sprite> wormGroup;
 
     double_list< double_list<chilo_sprite *> > worms;
 
+    float color1[3];
+    float color2[3];
+    float color3[3];
 
     // move the objects before drawing
     void simulate() {
       // up and down arrow move the right bat
       if (is_key_down(key_up)) {
-        player.translate(0, +0.1f);
+        player.y += SHIP_SPEED;
       } else if (is_key_down(key_down)) {
-        player.translate(0, -0.1f);
+        player.y -= SHIP_SPEED;
       }
       if (is_key_down(key_left)) {
-        player.translate(-0.1f, 0);
+        player.x -= SHIP_SPEED;
       } else if (is_key_down(key_right)) {
-        player.translate(0.1f, 0);
+        player.x += SHIP_SPEED;
       }
       if (is_key_down(key_space)) {
         //player.fire();
@@ -203,14 +206,30 @@ namespace octet {
   public:
 
     // this is called when we construct the class
-    chilopoda_app(int argc, char **argv) : app(argc, argv) {
+    chilopoda_app(int argc, char **argv) : app(argc, argv)
+    , SHIP_SPEED(1.0f) {
+
     }
 
     // this is called once OpenGL is initialized
     void app_init() {
       texture_palette_shader_.init();
       cameraToWorld.loadIdentity();
-      cameraToWorld.translate(0, 0, 5);
+      //cameraToWorld.ortho(-1000.0, 1000.0, -1000.0, 1000.0, 20.0, -20.0);
+
+      srand(time(NULL));
+
+      /*
+      color1[0] = 1.0f; color1[1] = 1.0f; color1[2] = 1.0f;
+      color2[0] = 0.0f; color2[1] = 1.0f; color2[2] = 1.0f;
+      color3[0] = 1.0f; color3[1] = 0.0f; color3[2] = 1.0f;
+      */
+
+      color1[0] = float(rand())/RAND_MAX; color1[1] = float(rand())/RAND_MAX; color1[2] = float(rand())/RAND_MAX;
+      color2[0] = float(rand())/RAND_MAX; color2[1] = float(rand())/RAND_MAX; color2[2] = float(rand())/RAND_MAX;
+      color3[0] = float(rand())/RAND_MAX; color3[1] = float(rand())/RAND_MAX; color3[2] = float(rand())/RAND_MAX;
+
+      cameraToWorld.translate(0, 0, 512.0f/2.0f);
       
       GLuint playerTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Ship.gif");
       GLuint mushroom1Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom1.gif");
@@ -220,13 +239,16 @@ namespace octet {
       GLuint monsterTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Monster.gif");
       GLuint laserTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Laser.gif");
       GLuint blamTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Blam.gif");
+      GLuint gridTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/grid.gif");
 
-      player.init(20, 20, 16, 16, playerTex);
+      grid.init(0, 0, 512, 512, gridTex);
+      player.init(0, 0, 16.0f, 16.0f, playerTex);
 
-      for (int i = 0; i != 50; i++) {
-        
+      for (int i = 0; i != 150; i++) {
+        chilo_sprite w;
+        w.init(-256.0f+(i%32)*16.0f+8.0f, -32.0f-(16*floor(i/32.0f))+8.0f, 16.0f, 16.0f, monsterTex);
+        wormGroup.push_back(w);
       }
-
 
       state = state_idle;
       score = 0;
@@ -243,11 +265,14 @@ namespace octet {
       glClearColor(0, 0, 0, 1);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      // allow Z buffer depth testing (closer objects are always drawn in front of far ones)
-      glEnable(GL_DEPTH_TEST);
+      glEnable(GL_BLEND);
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-      // draw the ball
-      player.render(texture_palette_shader_, cameraToWorld);
+      grid.render(texture_palette_shader_, cameraToWorld, color1, color2, color3, 0.25f);
+      player.render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
+      for (int i = 0; i != wormGroup.size(); i++) {
+        wormGroup[i].render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
+      }
     }
   };
 }

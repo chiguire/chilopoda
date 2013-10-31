@@ -22,6 +22,7 @@ namespace octet {
     GLuint color1Index_;
     GLuint color2Index_;
     GLuint color3Index_;
+    GLuint alphaIndex_;
 
   public:
     void init() {
@@ -50,6 +51,7 @@ namespace octet {
         uniform vec3 color1;
         uniform vec3 color2;
         uniform vec3 color3;
+        uniform float alpha;
 
         void main() { 
           vec4 texColor = texture2D(sampler, uv_);
@@ -57,7 +59,7 @@ namespace octet {
             (texColor.r*color1.r)+(texColor.g*color2.r)+(texColor.b*color3.r),
             (texColor.r*color1.g)+(texColor.g*color2.g)+(texColor.b*color3.g),
             (texColor.r*color1.b)+(texColor.g*color2.b)+(texColor.b*color3.b),
-            texColor.a);
+            texColor.a*alpha);
         }
       );
     
@@ -71,9 +73,10 @@ namespace octet {
       color1Index_ = glGetUniformLocation(program(), "color1");
       color2Index_ = glGetUniformLocation(program(), "color2");
       color3Index_ = glGetUniformLocation(program(), "color3");
+      alphaIndex_ = glGetUniformLocation(program(), "alpha");
     }
 
-    void render(const mat4t &modelToProjection, int sampler, float color1[3], float color2[3], float color3[3]) {
+    void render(const mat4t &modelToProjection, int sampler, float color1[3], float color2[3], float color3[3], float alpha=1.0f) {
       // tell openGL to use the program
       shader::render();
 
@@ -83,6 +86,7 @@ namespace octet {
       glUniform3f(color1Index_, color1[0], color1[1], color1[2]);
       glUniform3f(color2Index_, color2[0], color2[1], color2[2]);
       glUniform3f(color3Index_, color3[0], color3[1], color3[2]);
+      glUniform1f(alphaIndex_, alpha);
     }
   };
 }
