@@ -32,7 +32,7 @@ namespace octet {
 
     void init(
       float x, float y, float w, float h,
-      int _texture
+      int _texture=-1
     ) {
       modelToWorld.loadIdentity();
 
@@ -43,7 +43,9 @@ namespace octet {
       halfHeight = h * 0.5f;
       halfWidth = w * 0.5f;
 
-      texture = _texture;
+      if (_texture != -1) {
+        texture = _texture;
+      }
       enabled = true;
     }
 
@@ -61,8 +63,8 @@ namespace octet {
 
       glActiveTexture(GL_TEXTURE0);
       glBindTexture(GL_TEXTURE_2D, texture);
-      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 
       // set up the uniforms for the shader
       shader.render(modelToProjection, 0, color1, color2, color3, alpha);
@@ -143,32 +145,45 @@ namespace octet {
     int score;
 
     // game objects
-    chilo_sprite grid;
-    chilo_sprite player;
-    dynarray<chilo_sprite> fungiGroup;
+    chilo_sprite gridSprite;
+    chilo_sprite playerSprite;
+    chilo_sprite fireSprite;
+    dynarray<chilo_sprite> fungusGroup;
     dynarray<chilo_sprite> wormGroup;
 
-    double_list< double_list<chilo_sprite *> > worms;
+    typedef double_list<chilo_sprite *> sprite_list;
+    double_list< sprite_list > wormsList;
+    double_list< sprite_list > fungiList;
 
     float color1[3];
     float color2[3];
     float color3[3];
 
+    GLuint playerTex;
+    GLuint mushroom1Tex;
+    GLuint mushroom2Tex;
+    GLuint mushroom3Tex;
+    GLuint mushroom4Tex;
+    GLuint monsterTex;
+    GLuint laserTex;
+    GLuint blamTex;
+    GLuint gridTex;
+
     // move the objects before drawing
     void simulate() {
       // up and down arrow move the right bat
       if (is_key_down(key_up)) {
-        player.y += SHIP_SPEED;
+        playerSprite.y += SHIP_SPEED;
       } else if (is_key_down(key_down)) {
-        player.y -= SHIP_SPEED;
+        playerSprite.y -= SHIP_SPEED;
       }
       if (is_key_down(key_left)) {
-        player.x -= SHIP_SPEED;
+        playerSprite.x -= SHIP_SPEED;
       } else if (is_key_down(key_right)) {
-        player.x += SHIP_SPEED;
+        playerSprite.x += SHIP_SPEED;
       }
       if (is_key_down(key_space)) {
-        //player.fire();
+        fire();
       }
 
       if (state == state_idle) {
@@ -182,6 +197,22 @@ namespace octet {
         //   for w in worm
         //    if fire.collides_with(w)
         //     w.kill()
+        if (fireSprite.is_enabled()) {
+          fireSprite.y += 5.0f;
+          printf("Fire Sprite pos: (%.2f, %.2f)\n", fireSprite.x, fireSprite.y);
+          for (auto lst = wormsList.begin(); lst != wormsList.end(); ++lst) {
+            for (auto w = lst->begin(); w != lst->end(); ++w) {
+              if (fireSprite.collides_with(**w)) {
+                fireSprite.kill();
+
+              }
+            }
+          }
+
+          if (fireSprite.y >= 260.0f) {
+            fireSprite.kill();
+          }
+        }
 
         // if we are playing, move the worms
         // for worm in worms
@@ -206,8 +237,9 @@ namespace octet {
   public:
 
     // this is called when we construct the class
-    chilopoda_app(int argc, char **argv) : app(argc, argv)
-    , SHIP_SPEED(1.0f) {
+    chilopoda_app(int argc, char **argv)
+    : app(argc, argv)
+    , SHIP_SPEED(2.0f) {
 
     }
 
@@ -215,7 +247,6 @@ namespace octet {
     void app_init() {
       texture_palette_shader_.init();
       cameraToWorld.loadIdentity();
-      //cameraToWorld.ortho(-1000.0, 1000.0, -1000.0, 1000.0, 20.0, -20.0);
 
       srand(time(NULL));
 
@@ -231,27 +262,72 @@ namespace octet {
 
       cameraToWorld.translate(0, 0, 512.0f/2.0f);
       
-      GLuint playerTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Ship.gif");
-      GLuint mushroom1Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom1.gif");
-      GLuint mushroom2Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom2.gif");
-      GLuint mushroom3Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom3.gif");
-      GLuint mushroom4Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom4.gif");
-      GLuint monsterTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Monster.gif");
-      GLuint laserTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Laser.gif");
-      GLuint blamTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Blam.gif");
-      GLuint gridTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/grid.gif");
+      playerTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Ship.gif");
+      mushroom1Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom1.gif");
+      mushroom2Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom2.gif");
+      mushroom3Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom3.gif");
+      mushroom4Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom4.gif");
+      monsterTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Monster.gif");
+      laserTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Laser.gif");
+      blamTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Blam.gif");
+      gridTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/grid.gif");
 
-      grid.init(0, 0, 512, 512, gridTex);
-      player.init(0, 0, 16.0f, 16.0f, playerTex);
+      gridSprite.init(0, 0, 512, 512, gridTex);
+      playerSprite.init(0, -200, 16.0f, 16.0f, playerTex);
+      fireSprite.init(0, 0, 1.0f, 10.0f, laserTex);
+      fireSprite.kill();
 
       for (int i = 0; i != 150; i++) {
         chilo_sprite w;
         w.init(-256.0f+(i%32)*16.0f+8.0f, -32.0f-(16*floor(i/32.0f))+8.0f, 16.0f, 16.0f, monsterTex);
+        w.kill();
         wormGroup.push_back(w);
       }
 
-      state = state_idle;
+      sprite_list lst;
+      for (int i = 0; i != 3; i++) {
+        chilo_sprite *w = getFirstAvailableFromGroup(wormGroup);
+        printf("Adding sprite address %p\n", w);
+        if (!w) {
+          printf("ERROR: Out of sprites in wormGroup");
+        }
+        w->y = 230;
+        w->x = -256-(i+1)*16;
+        lst.push_back(w);
+      }
+      printf("List pointer: %p\n", &lst);
+      for (auto lstelem = lst.begin(); lstelem != lst.end(); ++lstelem) {
+        printf("Accessing x of an element: %.2f\n", (*lstelem)->x);
+      }
+      wormsList.push_back(lst);
+      printf("List inside wormsList pointer: %p\n", *lst.begin());
+      
+      for (auto welem = wormsList.begin(); welem != wormsList.end(); ++welem) {
+        printf("Assign a worm element from wormList, pointer: %p\n", *welem);
+        sprite_list lelst = *welem;
+        for (auto lstelem = lelst.begin(); lstelem != lelst.end(); ++lstelem) {
+          chilo_sprite *lespr = *lstelem;
+          printf("Accessing x of an element: %.2f\n", lespr->x);
+        }
+      }
+
+      state = state_playing;
       score = 0;
+    }
+
+    /* Returns the first non-enabled sprite from the specified group.
+     * If all sprites in group are enabled, function will return NULL.
+     */
+    chilo_sprite *getFirstAvailableFromGroup(dynarray<chilo_sprite> &group) {
+      for (int i = 0; i != group.size(); i++) {
+        if (!group[i].is_enabled()) {
+          chilo_sprite *spr = &group[i];
+          spr->init(0.0f, 0.0f, 16.0f, 16.0f);
+          return spr;
+        }
+      }
+
+      return NULL;
     }
 
     // this is called to draw the world
@@ -268,11 +344,25 @@ namespace octet {
       glEnable(GL_BLEND);
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-      grid.render(texture_palette_shader_, cameraToWorld, color1, color2, color3, 0.25f);
-      player.render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
-      for (int i = 0; i != wormGroup.size(); i++) {
-        wormGroup[i].render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
+      gridSprite.render(texture_palette_shader_, cameraToWorld, color1, color2, color3, 0.25f);
+      playerSprite.render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
+      for (auto worm = wormsList.begin(); worm != wormsList.end(); ++worm) {
+        for (auto w = worm->begin(); w != worm->end(); ++w) {
+          (**w).render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
+        }
       }
+
+      if (fireSprite.is_enabled()) {
+        fireSprite.render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
+      }
+    }
+
+    void fire() {
+      if (fireSprite.is_enabled()) {
+        return;
+      }
+      printf("fire! fire!");
+      fireSprite.init(playerSprite.x, playerSprite.y+16.0f, 1.0f, 10.0f);
     }
   };
 }
