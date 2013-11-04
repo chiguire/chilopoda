@@ -79,7 +79,7 @@ namespace octet {
       iterator(double_list_node *node) { this->node = node; }
       item *operator ->() { return &node->item_; }
       item &operator *() { return node->item_; }
-      bool operator != (const iterator &rhs) const { printf("Comparing pointers %p != %p\n", node, rhs.node); return node != rhs.node; }
+      bool operator != (const iterator &rhs) const { return node != rhs.node; }
       iterator &operator++() { node = (double_list_node *)node->next; return *this; }
       iterator &operator--() { node = (double_list_node *)node->prev; return *this; }
     };

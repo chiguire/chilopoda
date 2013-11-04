@@ -120,6 +120,63 @@ namespace octet {
     }
 
   };
+  
+  typedef double_list<chilo_sprite *> sprite_list;
+
+  class fungus : public octet::chilo_sprite {
+  public:
+    int health;
+    bool enabled;
+
+    fungus()
+    : health(4)
+    , enabled(false) {
+      chilo_sprite();
+    }
+  };
+
+  class worm {
+  public:
+    enum direction_t {
+      direction_left,
+      direction_right
+    } direction;
+    float speed;
+    sprite_list parts;
+    bool enabled;
+
+    worm()
+    : direction(direction_right)
+    , speed(5.0f)
+    , enabled(false)
+    , parts() {
+    }
+
+    worm(sprite_list &sprlist, direction_t dir = direction_right, float spd = 5.0f)
+    : direction(dir)
+    , speed(spd)
+    , enabled(false)
+    , parts() {
+      init(sprlist, dir, spd);
+    }
+
+    worm(worm &other)
+    : parts() {
+      init(other.parts, other.direction, other.speed);
+    }
+
+    void init(sprite_list &sprlist, direction_t dir = direction_right, float spd = 5.0f) {
+      this->direction = dir;
+      this->speed = spd;
+
+      for (auto s = parts.begin(); s != parts.end(); ++s) {
+        parts.erase(s);
+      }
+      for (auto s = sprlist.begin(); s != sprlist.end(); ++s) {
+        parts.push_back(*s);
+      }
+    }
+  };
 
   class chilopoda_app : public octet::app {
 
@@ -144,16 +201,18 @@ namespace octet {
     // counters for scores
     int score;
 
-    // game objects
+    // game objects, these are created once at the initialiation
     chilo_sprite gridSprite;
     chilo_sprite playerSprite;
     chilo_sprite fireSprite;
-    dynarray<chilo_sprite> fungusGroup;
-    dynarray<chilo_sprite> wormGroup;
+    dynarray<chilo_sprite> fungusSpriteGroup;
+    dynarray<chilo_sprite> wormSpriteGroup;
+    dynarray<worm *> wormGroup;
 
-    typedef double_list<chilo_sprite *> sprite_list;
-    double_list< sprite_list > wormsList;
-    double_list< sprite_list > fungiList;
+    // these objects store pointers to the Group members
+    // and they are accessed intensely inside the game loop
+    double_list<worm *> wormList;
+    double_list<fungus *> fungiList;
 
     float color1[3];
     float color2[3];
@@ -199,9 +258,9 @@ namespace octet {
         //     w.kill()
         if (fireSprite.is_enabled()) {
           fireSprite.y += 5.0f;
-          printf("Fire Sprite pos: (%.2f, %.2f)\n", fireSprite.x, fireSprite.y);
-          for (auto lst = wormsList.begin(); lst != wormsList.end(); ++lst) {
-            for (auto w = lst->begin(); w != lst->end(); ++w) {
+          //printf("Fire Sprite pos: (%.2f, %.2f)\n", fireSprite.x, fireSprite.y);
+          for (auto lst = wormGroup.begin(); lst != wormGroup.end(); ++lst) {
+            for (auto w = (*lst)->parts.begin(); w != (*lst)->parts.end(); ++w) {
               if (fireSprite.collides_with(**w)) {
                 fireSprite.kill();
 
@@ -234,6 +293,41 @@ namespace octet {
       }
     }
 
+    /* Converts a tile position to a screen position */
+    inline float fromTilePositionToScreenPosition(float xTile, float xTileWidth = 16.0f, float xOffset = -256.0f) {
+      return (xOffset + (xTile+0.5f) * xTileWidth);
+    }
+
+    /* Returns the first non-enabled sprite from the specified group.
+     * If all sprites in group are enabled, function will return NULL.
+     */
+    chilo_sprite *getFirstSpriteAvailableFromGroup(dynarray<chilo_sprite> &group) {
+      for (int i = 0; i != group.size(); i++) {
+        if (!group[i].is_enabled()) {
+          chilo_sprite *spr = &group[i];
+          spr->init(0.0f, 0.0f, 16.0f, 16.0f);
+          return spr;
+        }
+      }
+
+      return NULL;
+    }
+
+    /* Returns the first non-enabled worm from the specified group.
+     * If all worms in group are enabled, function will return NULL.
+     */
+    worm *getFirstWormAvailableFromGroup(dynarray<worm *> &group) {
+      for (int i = 0; i != group.size(); i++) {
+        if (!group[i]->enabled) {
+          worm *w = group[i];
+          w->enabled = true;
+          return w;
+        }
+      }
+
+      return NULL;
+    }
+
   public:
 
     // this is called when we construct the class
@@ -250,18 +344,18 @@ namespace octet {
 
       srand(time(NULL));
 
-      /*
-      color1[0] = 1.0f; color1[1] = 1.0f; color1[2] = 1.0f;
-      color2[0] = 0.0f; color2[1] = 1.0f; color2[2] = 1.0f;
-      color3[0] = 1.0f; color3[1] = 0.0f; color3[2] = 1.0f;
-      */
-
       color1[0] = float(rand())/RAND_MAX; color1[1] = float(rand())/RAND_MAX; color1[2] = float(rand())/RAND_MAX;
       color2[0] = float(rand())/RAND_MAX; color2[1] = float(rand())/RAND_MAX; color2[2] = float(rand())/RAND_MAX;
       color3[0] = float(rand())/RAND_MAX; color3[1] = float(rand())/RAND_MAX; color3[2] = float(rand())/RAND_MAX;
 
       cameraToWorld.translate(0, 0, 512.0f/2.0f);
-      
+     
+      initGame(); 
+      resetGame();
+    }
+
+    /* Initialize game objects, this is initialized once per application */
+    void initGame() {
       playerTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Ship.gif");
       mushroom1Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom1.gif");
       mushroom2Tex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Mushroom2.gif");
@@ -281,54 +375,62 @@ namespace octet {
         chilo_sprite w;
         w.init(-256.0f+(i%32)*16.0f+8.0f, -32.0f-(16*floor(i/32.0f))+8.0f, 16.0f, 16.0f, monsterTex);
         w.kill();
-        wormGroup.push_back(w);
+        wormSpriteGroup.push_back(w);
       }
 
+      for (int i = 0; i != 150; i++) {
+        wormGroup.push_back(new worm());
+      }
+
+      for (int i = 0; i != 150; i++) {
+        fungus fung;
+        fung.init(-256.0f, -256.0f, 16.0f, 16.0f, mushroom1Tex);
+        fung.kill();
+        fungusSpriteGroup.push_back(fung);
+      }
+
+      state = state_idle;
+      score = 0;
+    }
+    
+    /* Starts a new game */
+    void resetGame() {
+      //clear game objects
+
       sprite_list lst;
-      for (int i = 0; i != 3; i++) {
-        chilo_sprite *w = getFirstAvailableFromGroup(wormGroup);
-        printf("Adding sprite address %p\n", w);
+      for (int i = 0; i != 30; i++) {
+        chilo_sprite *w = getFirstSpriteAvailableFromGroup(wormSpriteGroup);
         if (!w) {
-          printf("ERROR: Out of sprites in wormGroup");
+          printf("ERROR: Out of sprites in wormSpriteGroup.\n");
         }
-        w->y = 230;
-        w->x = -256-(i+1)*16;
+        w->y = fromTilePositionToScreenPosition(30.0f);
+        w->x = fromTilePositionToScreenPosition(30.0f-i);
         lst.push_back(w);
       }
-      printf("List pointer: %p\n", &lst);
-      for (auto lstelem = lst.begin(); lstelem != lst.end(); ++lstelem) {
-        printf("Accessing x of an element: %.2f\n", (*lstelem)->x);
-      }
-      wormsList.push_back(lst);
-      printf("List inside wormsList pointer: %p\n", *lst.begin());
-      
-      for (auto welem = wormsList.begin(); welem != wormsList.end(); ++welem) {
-        printf("Assign a worm element from wormList, pointer: %p\n", *welem);
-        sprite_list lelst = *welem;
-        for (auto lstelem = lelst.begin(); lstelem != lelst.end(); ++lstelem) {
-          chilo_sprite *lespr = *lstelem;
-          printf("Accessing x of an element: %.2f\n", lespr->x);
+      worm *leWorm = getFirstWormAvailableFromGroup(wormGroup);
+      leWorm->init(lst);
+
+      wormList.push_back(leWorm);
+
+      for (int i = 0; i != 30; i++) {
+        fungus *f = static_cast<fungus *>(getFirstSpriteAvailableFromGroup(fungusSpriteGroup));
+        float xRandom = floor((float(rand())/RAND_MAX)*32.0f);
+        float yRandom = 2.0f + floor((float(rand())/RAND_MAX)*30.0f);
+        f->init(fromTilePositionToScreenPosition(xRandom),
+                fromTilePositionToScreenPosition(yRandom),
+                16.0f, 16.0f, mushroom1Tex);
+        f->health = 4;
+        if (!f) {
+          printf("ERROR: Out of sprites in fungusSpriteGroup.\n");
         }
+        fungiList.push_back(f); 
       }
 
       state = state_playing;
       score = 0;
     }
 
-    /* Returns the first non-enabled sprite from the specified group.
-     * If all sprites in group are enabled, function will return NULL.
-     */
-    chilo_sprite *getFirstAvailableFromGroup(dynarray<chilo_sprite> &group) {
-      for (int i = 0; i != group.size(); i++) {
-        if (!group[i].is_enabled()) {
-          chilo_sprite *spr = &group[i];
-          spr->init(0.0f, 0.0f, 16.0f, 16.0f);
-          return spr;
-        }
-      }
-
-      return NULL;
-    }
+    
 
     // this is called to draw the world
     void draw_world(int x, int y, int w, int h) {
@@ -346,10 +448,15 @@ namespace octet {
 
       gridSprite.render(texture_palette_shader_, cameraToWorld, color1, color2, color3, 0.25f);
       playerSprite.render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
-      for (auto worm = wormsList.begin(); worm != wormsList.end(); ++worm) {
-        for (auto w = worm->begin(); w != worm->end(); ++w) {
-          (**w).render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
+
+      for (auto worm = wormList.begin(); worm != wormList.end(); ++worm) {
+        for (auto w = (*worm)->parts.begin(); w != (*worm)->parts.end(); ++w) {
+          (*w)->render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
         }
+      }
+
+      for (auto f = fungiList.begin(); f != fungiList.end(); ++f) {
+        (*f)->render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
       }
 
       if (fireSprite.is_enabled()) {
@@ -361,7 +468,6 @@ namespace octet {
       if (fireSprite.is_enabled()) {
         return;
       }
-      printf("fire! fire!");
       fireSprite.init(playerSprite.x, playerSprite.y+16.0f, 1.0f, 10.0f);
     }
   };
