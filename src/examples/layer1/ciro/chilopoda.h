@@ -8,7 +8,14 @@
 //
 
 namespace octet {
+
+  /* Converts a tile position to a screen position */
+  inline float fromTilePositionToScreenPosition(float xTile, float xTileWidth = 16.0f, float xOffset = -256.0f) {
+    return (xOffset + (xTile+0.5f) * xTileWidth);
+  }
+
   class chilo_sprite {
+  protected:
     mat4t modelToWorld;
 
     // half the width of the box
@@ -27,6 +34,9 @@ namespace octet {
     float y;
     float rotation;
 
+    int xSpeed;
+    int ySpeed;
+
     static const unsigned int COLLIDE_LEFT = 1;
     static const unsigned int COLLIDE_RIGHT = 2;
     static const unsigned int COLLIDE_TOP = 4;
@@ -35,35 +45,40 @@ namespace octet {
     unsigned int collided_directions;
 
     chilo_sprite()
+    : x(0.0f)
+    , y(0.0f)
+    , rotation(0.0f)
+    , xSpeed(0)
+    , ySpeed(0)
+    , collided_directions(0)
     { }
 
-    void init(
-      float x, float y, float w, float h,
-      int _texture=-1
-      ) {
-        modelToWorld.loadIdentity();
+    void init(float _x, float _y, float w, float h, int _texture = -1) {
+      modelToWorld.loadIdentity();
 
-        this->x = x;
-        this->y = y;
-        this->rotation = 0;
-        this->collided_directions = 0;
+      x = _x;
+      y = _y;
+      rotation = 0;
+      collided_directions = 0;
+      xSpeed = 0;
+      ySpeed = 0;
 
-        halfHeight = h * 0.5f;
-        halfWidth = w * 0.5f;
+      halfHeight = h * 0.5f;
+      halfWidth = w * 0.5f;
 
-        if (_texture != -1) {
-          texture = _texture;
-        }
-        enabled = true;
+      if (_texture != -1) {
+        texture = _texture;
+      }
+      enabled = true;
     }
 
     void render(texture_palette_shader &shader, mat4t &cameraToWorld, float *color1, float *color2, float *color3, float alpha=1.0f) {
 
-      if (!texture) return;
+      if (texture == -1) return;
 
       modelToWorld.loadIdentity();
-      modelToWorld.rotate(rotation, 0, 0, 1);
       modelToWorld.translate(x, y, 0);
+      modelToWorld.rotate(rotation, 0, 0, 1);
 
       // build a projection matrix: model -> world -> camera -> projection
       // the projection space is the cube -1 <= x/w, y/w, z/w <= 1
@@ -73,6 +88,8 @@ namespace octet {
       glBindTexture(GL_TEXTURE_2D, texture);
       glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
       glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP);
+      glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 
       // set up the uniforms for the shader
       shader.render(modelToProjection, 0, color1, color2, color3, alpha);
@@ -80,10 +97,10 @@ namespace octet {
       // this is an array of the positions of the corners of the box in 3D
       // a straight "float" here means this array is being generated here at runtime.
       float vertices[] = {
-        -halfWidth, -halfHeight, 0.0f, 0.0f, //-halfWidth * uscale + uoffset, -halfHeight * vscale + voffset,
-        halfWidth, -halfHeight, 1.0f, 0.0f, // halfWidth * uscale + uoffset, -halfHeight * vscale + voffset, 
-        halfWidth,  halfHeight, 1.0f, 1.0f,// halfWidth * uscale + uoffset,  halfHeight * vscale + voffset,
-        -halfWidth,  halfHeight, 0.0f, 1.0f //-halfWidth * uscale + uoffset,  halfHeight * vscale + voffset,
+        -halfWidth, -halfHeight, 0.0f, 0.0f,
+        halfWidth, -halfHeight, 1.0f, 0.0f, 
+        halfWidth,  halfHeight, 1.0f, 1.0f,
+        -halfWidth,  halfHeight, 0.0f, 1.0f
       };
 
       // attribute_pos (=0) is position of each corner
@@ -99,33 +116,29 @@ namespace octet {
 
     }
 
-    // position the object relative to another.
-    void set_relative(chilo_sprite &rhs, float xOffset, float yOffset) {
-      x = rhs.x + xOffset;
-      y = rhs.y + yOffset;
-    }
-
     // return true if this box collides with another
     // note the "const"s which say we do not modify either box
-    bool collides_with(const chilo_sprite &rhs, const float xSpeed = 0.0f, const float ySpeed = 0.0f) {
+    bool collides_with(const chilo_sprite &rhs) {
+      static const float OVERLAP = 0.0f;
+
       float dx = rhs.x - (x + xSpeed);
       float dy = rhs.y - (y + ySpeed);
 
       collided_directions = 0;
 
-      bool collides_sides = fabsf(dx) < halfWidth + rhs.halfWidth;
-      bool collides_tops = fabsf(dy) < halfHeight + rhs.halfHeight;
+      bool collides_sides = fabsf(dx) < halfWidth + rhs.halfWidth - OVERLAP;
+      bool collides_tops = fabsf(dy) < halfHeight + rhs.halfHeight - OVERLAP;
 
       if (collides_sides && collides_tops) {
         if (collides_sides) {
           if (dx < 0) { //rhs is on left of this sprite
             collided_directions |= COLLIDE_LEFT;
-            if (fabsf(ySpeed) < 0.1f) {
+            if (ySpeed == 0) {
               x = rhs.x + rhs.halfWidth + halfWidth;
             }
           } else {
             collided_directions |= COLLIDE_RIGHT;
-            if (fabsf(ySpeed) < 0.1f) {
+            if (ySpeed == 0) {
               x = rhs.x - rhs.halfWidth - halfWidth;
             }
           }
@@ -133,12 +146,12 @@ namespace octet {
         if (collides_tops) {
           if (dy < 0) { //rhs in on bottom of this sprite
             collided_directions |= COLLIDE_BOTTOM;
-            if (fabsf(xSpeed) < 0.1f) {
+            if (xSpeed == 0) {
               y = rhs.y + rhs.halfHeight + halfHeight;
             }
           } else {
             collided_directions |= COLLIDE_TOP;
-            if (fabsf(xSpeed) < 0.1f) {
+            if (xSpeed == 0) {
               y = rhs.y - rhs.halfHeight - halfHeight;
             }
           }
@@ -147,6 +160,29 @@ namespace octet {
       // both distances have to be under the sum of the halfwidths
       // for a collision
       return collided_directions? true: false;
+    }
+
+    bool collides_with_screen(float left, float right, float top, float bottom) {
+      collided_directions = 0;
+      if (x + xSpeed < left) {
+        collided_directions |= COLLIDE_LEFT;
+      }
+      if (x + xSpeed > right) {
+        collided_directions |= COLLIDE_RIGHT;
+      }
+      if (y + ySpeed < bottom) {
+        collided_directions |= COLLIDE_BOTTOM;
+      }
+      if (y + ySpeed > top) {
+        collided_directions |= COLLIDE_TOP;
+      }
+
+      return collided_directions? true: false;
+    }
+
+    void move() {
+      x += xSpeed;
+      y += ySpeed;
     }
 
     void kill() {
@@ -161,69 +197,121 @@ namespace octet {
 
   typedef double_list<chilo_sprite *> sprite_list;
 
-  class fungus : public octet::chilo_sprite {
+  class fungus_sprite : public octet::chilo_sprite {
   public:
     int health;
-    bool enabled;
 
-    fungus()
-      : health(4)
-      , enabled(false) {
-        chilo_sprite();
+    fungus_sprite()
+      : chilo_sprite()
+      , health(4) {
+    }
+
+    void init(float x, float y, float w, float h, int _texture = -1, int _health = 4) {
+      chilo_sprite::init(x, y, w, h, _texture);
+      health = _health;
+    }
+
+    void collide_callback(bool isFire = false) {
+      if (isFire) {
+        health--;
+        if (!health) {
+          kill();
+        }
+      }
     }
   };
 
-  class worm {
+  class worm_sprite : public chilo_sprite {
   public:
     enum direction_t {
       direction_left = -1,
       direction_down = 0,
-      direction_right = 1
+      direction_right = 1,
+      direction_up = 2,
     };
 
-    class worm_part : public chilo_sprite {
-    public:
-      direction_t previousDirection;
-      direction_t direction;
-      float currentYScreen;
+    direction_t verticalDirection;
+    direction_t previousDirection;
+    direction_t direction;
+    float yCurrentLine;
+    int speed;
 
-      worm_part()
-        : chilo_sprite()
-      { }
-    };
+    worm_sprite()
+      : chilo_sprite()
+      , verticalDirection(direction_down)
+      , previousDirection(direction_left)
+      , direction(direction_left)
+      , yCurrentLine(0.0f)
+      , speed(4)
+    { }
 
-    float speed;
-    sprite_list parts;
-    bool enabled;
+    void init(float x, float y, float w, float h, int _texture = -1,
+      direction_t _direction = direction_right, int _speed = 4) {
 
-    worm()
-      : speed(5.0f)
-      , enabled(false)
-      , parts() {
+        chilo_sprite::init(x, y, w, h, _texture);
+
+        yCurrentLine = y;
+        verticalDirection = direction_down;
+        previousDirection = _direction;
+        speed = _speed;
+
+        setDirection(_direction);
     }
 
-    worm(sprite_list &sprlist, direction_t dir = direction_right, float spd = 5.0f)
-      : speed(spd)
-      , enabled(false)
-      , parts() {
-        init(sprlist, dir, spd);
-    }
-
-    void init(sprite_list &sprlist, direction_t dir = direction_right, float spd = 5.0f) {
-      this->speed = spd;
-
-      for (auto s = parts.begin(); s != parts.end(); ++s) {
-        parts.erase(s);
+    void setDirection(direction_t _d) {
+      direction = _d;
+      if (direction == direction_right) {
+        xSpeed = speed;
+        ySpeed = 0;
+        rotation = 180.0f;
+      } else if (direction == direction_left) {
+        xSpeed = -speed;
+        ySpeed = 0;
+        rotation = 0.0f;
+      } else if (direction == direction_up) {
+        xSpeed = 0;
+        ySpeed = speed;
+        rotation = 270.0f;
+      } else if (direction == direction_down) {
+        xSpeed = 0;
+        ySpeed = -speed;
+        rotation = 90.0f;
       }
-      for (auto s = sprlist.begin(); s != sprlist.end(); ++s) {
-        static_cast<worm_part *>(*s)->direction = dir;
-        parts.push_back(*s);
+    }
+
+    void followVerticalDirection() {
+      if (xSpeed == 0) {
+        if ((direction == direction_down && y + ySpeed <= yCurrentLine) ||
+            (direction == direction_up && y + ySpeed >= yCurrentLine)) {
+          y = yCurrentLine;
+          setDirection(previousDirection == direction_left? direction_right: direction_left);
+        }
+      } else {
+        //Try to go further down or up
+        previousDirection = direction;
+        setDirection(verticalDirection);
+
+        //Try to collide with screen with new direction
+        if (collides_with_screen(
+          fromTilePositionToScreenPosition(0),
+          fromTilePositionToScreenPosition(31), 
+          fromTilePositionToScreenPosition(31),
+          fromTilePositionToScreenPosition(0))) {
+            if (collided_directions & COLLIDE_BOTTOM && verticalDirection == direction_down) {
+              verticalDirection = direction_up;
+              setDirection(verticalDirection);
+            } else if (collided_directions & COLLIDE_TOP && verticalDirection == direction_up) {
+              verticalDirection = direction_down;
+              setDirection(verticalDirection);
+            }
+        }
+
+        yCurrentLine += (verticalDirection == direction_down? -1: 1)*halfHeight*2;
       }
     }
   };
 
   class chilopoda_app : public octet::app {
-
 
     // Matrix to transform points in our camera space to the world.
     // This lets us move our camera
@@ -244,23 +332,17 @@ namespace octet {
     // counters for scores
     int score;
 
-    // player direction, affected by keyboard, checked at simulate() for 
-    // collision
-    float xPlayerSpeed;
-    float yPlayerSpeed;
-
     // game objects, these are created once at the initialiation
     chilo_sprite gridSprite;
     chilo_sprite playerSprite;
     chilo_sprite fireSprite;
     dynarray<chilo_sprite *> fungusSpriteGroup;
     dynarray<chilo_sprite *> wormSpriteGroup;
-    dynarray<worm *> wormGroup;
 
     // these objects store pointers to the Group members
     // and they are accessed intensely inside the game loop
-    double_list<worm *> wormList;
-    double_list<fungus *> fungiList;
+    double_list<worm_sprite *> wormList;
+    double_list<fungus_sprite *> fungiList;
 
     float color1[3];
     float color2[3];
@@ -280,19 +362,19 @@ namespace octet {
     void simulate() {
       // up and down arrow move the right bat
       if (is_key_down(key_up)) {
-        yPlayerSpeed = SHIP_SPEED;
+        playerSprite.ySpeed = SHIP_SPEED;
       } else if (is_key_down(key_down)) {
-        yPlayerSpeed = -SHIP_SPEED;
+        playerSprite.ySpeed = -SHIP_SPEED;
       } else {
-        yPlayerSpeed = 0;
+        playerSprite.ySpeed = 0;
       }
 
       if (is_key_down(key_left)) {
-        xPlayerSpeed = -SHIP_SPEED;
+        playerSprite.xSpeed = -SHIP_SPEED;
       } else if (is_key_down(key_right)) {
-        xPlayerSpeed = SHIP_SPEED;
+        playerSprite.xSpeed = SHIP_SPEED;
       } else {
-        xPlayerSpeed = 0;
+        playerSprite.xSpeed = 0;
       }
 
       if (is_key_down(key_space)) {
@@ -312,97 +394,107 @@ namespace octet {
         //     w.kill()
 
         // Check player collisions
-        int i = 0;
         for (auto lst = fungiList.begin(); lst != fungiList.end(); ++lst) {
-          if (playerSprite.collides_with(**lst, xPlayerSpeed, yPlayerSpeed)) {
-            if (xPlayerSpeed > 0 &&
+          if (playerSprite.collides_with(**lst)) {
+            if (playerSprite.xSpeed > 0 &&
               (playerSprite.collided_directions & chilo_sprite::COLLIDE_RIGHT)) {
-                xPlayerSpeed = 0;
-                //printf("Collide right with fungus %d\n", i);
-            } else if (xPlayerSpeed < 0 &&
+                playerSprite.xSpeed = 0;
+            } else if (playerSprite.xSpeed < 0 &&
               (playerSprite.collided_directions & chilo_sprite::COLLIDE_LEFT)) {
-                xPlayerSpeed = 0;
-                //printf("Collide left with fungus %d\n", i);
+                playerSprite.xSpeed = 0;
             }
 
-            if (yPlayerSpeed > 0 &&
+            if (playerSprite.ySpeed > 0 &&
               (playerSprite.collided_directions & chilo_sprite::COLLIDE_TOP)) {
-                yPlayerSpeed = 0;
-                //printf("Collide top with fungus %d\n", i);
-            } else if (yPlayerSpeed < 0 &&
+                playerSprite.ySpeed = 0;
+            } else if (playerSprite.ySpeed < 0 &&
               (playerSprite.collided_directions & chilo_sprite::COLLIDE_BOTTOM)) {
-                yPlayerSpeed = 0;
-                //printf("Collide bottom with fungus %d\n", i);
+                playerSprite.ySpeed = 0;
             }
           }
-          i++;
         }
 
-        playerSprite.x += xPlayerSpeed;
-        playerSprite.y += yPlayerSpeed;
+        if (playerSprite.collides_with_screen(
+          fromTilePositionToScreenPosition(0),
+          fromTilePositionToScreenPosition(31), 
+          fromTilePositionToScreenPosition(5),
+          fromTilePositionToScreenPosition(0))) {
+            if (playerSprite.collided_directions & 
+              (chilo_sprite::COLLIDE_LEFT | chilo_sprite::COLLIDE_RIGHT)) {
+                playerSprite.xSpeed = 0;
+            }
+            if (playerSprite.collided_directions & 
+              (chilo_sprite::COLLIDE_TOP | chilo_sprite::COLLIDE_BOTTOM)) {
+                playerSprite.ySpeed = 0;
+            }
+        }
+
+        playerSprite.move();
 
         // Moving fire sprite
         if (fireSprite.is_enabled()) {
           fireSprite.y += 5.0f;
-          for (auto lst = wormGroup.begin(); lst != wormGroup.end(); ++lst) {
-            for (auto w = (*lst)->parts.begin(); w != (*lst)->parts.end(); ++w) {
-              if (fireSprite.collides_with(**w)) {
-                fireSprite.kill();
-              }
+          for (auto w = wormList.begin(); w != wormList.end(); ++w) {
+            if (fireSprite.collides_with(**w)) {
+              fireSprite.kill();
             }
           }
 
           if (fireSprite.y >= 260.0f) {
             fireSprite.kill();
           }
-
-
-
         }
 
         // Moving worms
-        for (auto worm = wormList.begin(); worm != wormList.end(); ++worm) {
-          worm::worm_part *previousSprite = NULL;
-          for (auto w = (*worm)->parts.begin(); w != (*worm)->parts.end(); ++w) {
-            worm::worm_part *wSprite = static_cast<worm::worm_part *>(*w);
-            wSprite->x += wSprite->direction*(*worm)->speed;
-            if (wSprite->direction == worm::direction_down) {
-              wSprite->y -= (*worm)->speed;
-              if (wSprite->y <= wSprite->currentYScreen) {
-                wSprite->y = wSprite->currentYScreen;
-                if (wSprite->previousDirection == worm::direction_left) {
-                  wSprite->direction = worm::direction_right;
-                } else {
-                  wSprite->direction = worm::direction_left;
-                }
+        bool first = false;
+        for (auto w = wormList.begin(); w != wormList.end(); ++w) {
+          worm_sprite *wSprite = *w;
+
+          //Collision with screen
+          if (wSprite->collides_with_screen(
+            fromTilePositionToScreenPosition(0),
+            fromTilePositionToScreenPosition(31), 
+            fromTilePositionToScreenPosition(31),
+            fromTilePositionToScreenPosition(0))) {
+              if (wSprite->collided_directions & 
+                (chilo_sprite::COLLIDE_LEFT | chilo_sprite::COLLIDE_RIGHT)) {
+                  wSprite->followVerticalDirection();
               }
-            }
-            float xScreenCollision = fromTilePositionToScreenPosition(-100);
-
-            if (wSprite->direction == worm::direction_left &&
-              wSprite->x <= fromTilePositionToScreenPosition(0)) {
-                xScreenCollision = fromTilePositionToScreenPosition(0);
-            }
-
-            if (wSprite->direction == worm::direction_right &&
-              wSprite->x > fromTilePositionToScreenPosition(31)) {
-                xScreenCollision = fromTilePositionToScreenPosition(31);
-            }
-
-            if (false) { //There's a fungus in the middle
-
-            }                  
-
-            if (xScreenCollision >= fromTilePositionToScreenPosition(-1)) {
-              //There was a collision
-              wSprite->previousDirection = wSprite->direction;
-              wSprite->direction = worm::direction_down;
-              wSprite->x = xScreenCollision;
-              wSprite->currentYScreen = wSprite->y-16.0f;
-            }
-
-            previousSprite = wSprite;
           }
+
+          // Detect possible collisions with fungi 
+          for (auto f = fungiList.begin(); f != fungiList.end(); ++f) {
+
+            if (wSprite->direction == worm_sprite::direction_left ||
+              wSprite->direction == worm_sprite::direction_right) {
+                if (first) printf("Going %s\n", wSprite->direction == worm_sprite::direction_left? "left": "right");
+                if (wSprite->collides_with(**f)) {
+                  if (wSprite->direction == worm_sprite::direction_left &&
+                    wSprite->collided_directions & chilo_sprite::COLLIDE_LEFT) {
+                      wSprite->followVerticalDirection();
+                      if (first) printf("Collision with fungus on the left\n");
+                      break;
+                  }
+                  if (wSprite->direction == worm_sprite::direction_right &&
+                    wSprite->collided_directions & chilo_sprite::COLLIDE_RIGHT) {
+                      wSprite->followVerticalDirection();
+                      if (first) printf("Collision with fungus on the right\n");
+                      break;
+                  }
+                }
+            } else {
+              worm_sprite::direction_t previousDirection = wSprite->direction;
+              wSprite->followVerticalDirection();
+              worm_sprite::direction_t newDirection = wSprite->direction;
+              if (previousDirection == newDirection) {
+                if (first) printf("Going %s\n", wSprite->direction == worm_sprite::direction_up? "up": "down");
+              } else {
+                if (first) printf("Reached bottom, going %s\n", wSprite->direction == worm_sprite::direction_left? "left": "right");
+              }
+            } 
+          }                  
+          wSprite->move();
+          first = false;
         }
 
         // if we are playing, move the worms
@@ -425,10 +517,7 @@ namespace octet {
       }
     }
 
-    /* Converts a tile position to a screen position */
-    inline float fromTilePositionToScreenPosition(float xTile, float xTileWidth = 16.0f, float xOffset = -256.0f) {
-      return (xOffset + (xTile+0.5f) * xTileWidth);
-    }
+
 
     /* Returns the first non-enabled sprite from the specified group.
     * If all sprites in group are enabled, function will return NULL.
@@ -445,29 +534,18 @@ namespace octet {
       return NULL;
     }
 
-    /* Returns the first non-enabled worm from the specified group.
-    * If all worms in group are enabled, function will return NULL.
-    */
-    worm *getFirstWormAvailableFromGroup(dynarray<worm *> &group) {
-      for (int i = 0; i != group.size(); i++) {
-        if (!group[i]->enabled) {
-          worm *w = group[i];
-          w->enabled = true;
-          return w;
-        }
-      }
-
-      return NULL;
-    }
-
   public:
 
-    static const float SHIP_SPEED;
+    static const int SHIP_SPEED = 3;
 
     // this is called when we construct the class
     chilopoda_app(int argc, char **argv)
       : app(argc, argv) {
 
+    }
+
+    ~chilopoda_app() {
+      //delete all pointers created in initGame();
     }
 
     // this is called once OpenGL is initialized
@@ -505,25 +583,18 @@ namespace octet {
       fireSprite.kill();
 
       for (int i = 0; i != 150; i++) {
-        worm::worm_part *w = new worm::worm_part;
+        worm_sprite *w = new worm_sprite;
         w->init(-256.0f+(i%32)*16.0f+8.0f, -32.0f-(16*floor(i/32.0f))+8.0f, 16.0f, 16.0f, monsterTex);
         w->kill();
         wormSpriteGroup.push_back(w);
       }
 
       for (int i = 0; i != 150; i++) {
-        wormGroup.push_back(new worm());
-      }
-
-      for (int i = 0; i != 150; i++) {
-        fungus *fung = new fungus;
+        fungus_sprite *fung = new fungus_sprite;
         fung->init(-256.0f, -256.0f, 16.0f, 16.0f, mushroom1Tex);
         fung->kill();
         fungusSpriteGroup.push_back(fung);
       }
-
-      xPlayerSpeed = 0;
-      yPlayerSpeed = 0;
 
       state = state_idle;
       score = 0;
@@ -533,29 +604,25 @@ namespace octet {
     void resetGame() {
       //clear game objects
 
-      sprite_list lst;
       for (int i = 0; i != 30; i++) {
-        chilo_sprite *w = getFirstSpriteAvailableFromGroup(wormSpriteGroup);
+        worm_sprite *w = static_cast<worm_sprite *>(getFirstSpriteAvailableFromGroup(wormSpriteGroup));
         if (!w) {
           printf("ERROR: Out of sprites in wormSpriteGroup.\n");
         }
-        w->y = fromTilePositionToScreenPosition(30.0f);
-        w->x = fromTilePositionToScreenPosition(30.0f-i);
-        lst.push_back(w);
+        w->init(fromTilePositionToScreenPosition(30.0f-i),
+          fromTilePositionToScreenPosition(32.0f),
+          16.0f, 16.0f, monsterTex,
+          worm_sprite::direction_right);
+        wormList.push_back(w);
       }
-      worm *leWorm = getFirstWormAvailableFromGroup(wormGroup);
-      leWorm->init(lst);
-
-      wormList.push_back(leWorm);
 
       for (int i = 0; i != 30; i++) {
-        fungus *f = static_cast<fungus *>(getFirstSpriteAvailableFromGroup(fungusSpriteGroup));
-        float xRandom = floor((float(rand())/RAND_MAX)*32.0f);
+        fungus_sprite *f = static_cast<fungus_sprite *>(getFirstSpriteAvailableFromGroup(fungusSpriteGroup));
+        float xRandom = floor((float(rand())/RAND_MAX)*31.0f);
         float yRandom = 5.0f + floor((float(rand())/RAND_MAX)*(32.0f-5.0f));
         f->init(fromTilePositionToScreenPosition(xRandom),
           fromTilePositionToScreenPosition(yRandom),
-          16.0f, 16.0f, mushroom1Tex);
-        f->health = 4;
+          16.0f, 16.0f, mushroom1Tex, 4);
         if (!f) {
           printf("ERROR: Out of sprites in fungusSpriteGroup.\n");
         }
@@ -585,10 +652,8 @@ namespace octet {
       gridSprite.render(texture_palette_shader_, cameraToWorld, color1, color2, color3, 0.25f);
       playerSprite.render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
 
-      for (auto worm = wormList.begin(); worm != wormList.end(); ++worm) {
-        for (auto w = (*worm)->parts.begin(); w != (*worm)->parts.end(); ++w) {
-          (*w)->render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
-        }
+      for (auto w = wormList.begin(); w != wormList.end(); ++w) {
+        (*w)->render(texture_palette_shader_, cameraToWorld, color1, color2, color3);
       }
 
       for (auto f = fungiList.begin(); f != fungiList.end(); ++f) {
@@ -607,6 +672,4 @@ namespace octet {
       fireSprite.init(playerSprite.x, playerSprite.y+16.0f, 1.0f, 10.0f);
     }
   };
-
-  const float chilopoda_app::SHIP_SPEED = 3.0f;
 }

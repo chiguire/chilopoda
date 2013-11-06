@@ -286,7 +286,7 @@ namespace octet {
         }
 
         // waste some time. (do not do this in real games!)
-        Sleep(1000/30);
+        Sleep(1000/60);
 
         for (int i = 0; i != m.size(); ++i) {
           // note: because Win8 generates an invisible window, we need to check m.value(i)
