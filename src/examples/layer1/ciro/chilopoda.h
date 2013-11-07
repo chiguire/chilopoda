@@ -8,13 +8,42 @@
 //
 
 namespace octet {
+  
+  class chilopoda_app_config {
+  public:
+    static const int INITIAL_LIVES = 5;          // Player lives
+    static const int SHIP_SPEED = 10;            // Player speed
+    static const int FIRE_SPEED = 10;            // Bullet speed
+    static const int INITIAL_WORM_SIZE = 10;     // First level worm size, each level one piece is added
+    static const int MAX_WORM_SIZE = 150;        // Maximum worms available in pool
+    static const int INITIAL_FUNGUS_SIZE = 50;   // Initial number of fungi placed in leve
+    static const int MAX_FUNGUS_SIZE = 300;      // Maximum number of fungi in pool
+    static const int WORM_SPEED = 4;             // Worm speed, constant throughout all levels
+    static const int FUNGUS_HEALTH = 4;          // Fungus initial health
+
+    static const int PLAYER_DIED_TIME = 3;       // Time in seconds displaying player death before restarting
+    static const int LEVEL_FINISHED_TIME = 3;    // Time in seconds displaying level finished before advancing
+    static const int GAME_OVER_DISPLAY_TIME = 5; // Time in seconds displaying game over sign
+    static const int BLAM_DISPLAY_TIME = 1;      // Time in seconds displaying worm explosion sprite
+
+    // Screen coordinates in game. Change these if changing screen, tile or board dimensions.
+    static const int TILE_WIDTH = 16;
+    static const int SCREEN_OFFSET = -256;
+    static const int MIN_TILE = 0;
+    static const int MAX_TILE = 31;
+    static const int SCREEN_SIZE = 512;
+  };
 
   /* Converts a tile position to a screen position */
-  inline float fromTilePositionToScreenPosition(float xTile, float xTileWidth = 16.0f, float xOffset = -256.0f) {
+  inline float from_tile_position_to_screen_position(float xTile,
+                                                     float xTileWidth = chilopoda_app_config::TILE_WIDTH,
+                                                     float xOffset = chilopoda_app_config::SCREEN_OFFSET) {
     return (xOffset + (xTile+0.5f) * xTileWidth);
   }
 
-  inline float fromScreenPositionToTile(float xScreen, float xTileWidth = 16.0f, float xOffset = -256.0f) {
+  inline float from_screen_position_to_tile_position(float xScreen,
+                                                     float xTileWidth = chilopoda_app_config::TILE_WIDTH,
+                                                     float xOffset = chilopoda_app_config::SCREEN_OFFSET) {
     return floorf(((xScreen - xOffset - 0.5f*xTileWidth)/xTileWidth)+0.5f);
   }
 
@@ -44,17 +73,17 @@ namespace octet {
       return *this;
     }
 
-    void cycleColor(int angle) {
-      color_hsv_t hsv = toHSV();
+    void cycle_color(int angle) {
+      color_hsv_t hsv = to_HSV();
       hsv.h += angle;
       if (hsv.h >= 360.0f) hsv.h -= 360.0f;
-      color c = fromHSV(hsv.h, hsv.s, hsv.v);
+      color c = from_HSV(hsv.h, hsv.s, hsv.v);
       r = c.r;
       g = c.g;
       b = c.b;
     }
 
-    color_hsv_t toHSV() {
+    color_hsv_t to_HSV() {
       color_hsv_t result;
       
       float min, max, delta;
@@ -93,7 +122,7 @@ namespace octet {
       return result;
     }
 
-    static color fromHSV(float h, float s, float v) {
+    static color from_HSV(float h, float s, float v) {
       color c;
 
       if (s <= 0) {
@@ -175,7 +204,7 @@ namespace octet {
     static const unsigned int COLLIDE_TOP = 4;
     static const unsigned int COLLIDE_BOTTOM = 8;
 
-    unsigned int collided_directions;
+    unsigned int collidedDirections;
 
     chilo_sprite()
     : x(0.0f)
@@ -183,7 +212,7 @@ namespace octet {
     , rotation(0.0f)
     , xSpeed(0)
     , ySpeed(0)
-    , collided_directions(0)
+    , collidedDirections(0)
     { }
 
     void init(float _x, float _y, float w, float h, int _texture = -1) {
@@ -192,7 +221,7 @@ namespace octet {
       x = _x;
       y = _y;
       rotation = 0;
-      collided_directions = 0;
+      collidedDirections = 0;
       xSpeed = 0;
       ySpeed = 0;
 
@@ -257,7 +286,7 @@ namespace octet {
       float dx = rhs.x - (x + xSpeed);
       float dy = rhs.y - (y + ySpeed);
 
-      collided_directions = 0;
+      collidedDirections = 0;
 
       bool collides_sides = fabsf(dx) < halfWidth + rhs.halfWidth - OVERLAP;
       bool collides_tops = fabsf(dy) < halfHeight + rhs.halfHeight - OVERLAP;
@@ -265,12 +294,12 @@ namespace octet {
       if (collides_sides && collides_tops) {
         if (collides_sides) {
           if (dx < 0) { //rhs is on left of this sprite
-            collided_directions |= COLLIDE_LEFT;
+            collidedDirections |= COLLIDE_LEFT;
             if (ySpeed == 0) {
               x = rhs.x + rhs.halfWidth + halfWidth;
             }
           } else {
-            collided_directions |= COLLIDE_RIGHT;
+            collidedDirections |= COLLIDE_RIGHT;
             if (ySpeed == 0) {
               x = rhs.x - rhs.halfWidth - halfWidth;
             }
@@ -278,12 +307,12 @@ namespace octet {
         }
         if (collides_tops) {
           if (dy < 0) { //rhs in on bottom of this sprite
-            collided_directions |= COLLIDE_BOTTOM;
+            collidedDirections |= COLLIDE_BOTTOM;
             if (xSpeed == 0) {
               y = rhs.y + rhs.halfHeight + halfHeight;
             }
           } else {
-            collided_directions |= COLLIDE_TOP;
+            collidedDirections |= COLLIDE_TOP;
             if (xSpeed == 0) {
               y = rhs.y - rhs.halfHeight - halfHeight;
             }
@@ -292,25 +321,28 @@ namespace octet {
       }
       // both distances have to be under the sum of the halfwidths
       // for a collision
-      return collided_directions? true: false;
+      return collidedDirections? true: false;
     }
 
-    bool collides_with_screen(float left, float right, float top, float bottom) {
-      collided_directions = 0;
+    bool collides_with_screen(float left = from_tile_position_to_screen_position(chilopoda_app_config::MIN_TILE), 
+                              float right = from_tile_position_to_screen_position(chilopoda_app_config::MAX_TILE), 
+                              float top = from_tile_position_to_screen_position(chilopoda_app_config::MAX_TILE), 
+                              float bottom = from_tile_position_to_screen_position(chilopoda_app_config::MIN_TILE)) {
+      collidedDirections = 0;
       if (x + xSpeed < left) {
-        collided_directions |= COLLIDE_LEFT;
+        collidedDirections |= COLLIDE_LEFT;
       }
       if (x + xSpeed > right) {
-        collided_directions |= COLLIDE_RIGHT;
+        collidedDirections |= COLLIDE_RIGHT;
       }
       if (y + ySpeed < bottom) {
-        collided_directions |= COLLIDE_BOTTOM;
+        collidedDirections |= COLLIDE_BOTTOM;
       }
       if (y + ySpeed > top) {
-        collided_directions |= COLLIDE_TOP;
+        collidedDirections |= COLLIDE_TOP;
       }
 
-      return collided_directions? true: false;
+      return collidedDirections? true: false;
     }
 
     void move() {
@@ -336,10 +368,10 @@ namespace octet {
 
     fungus_sprite()
       : chilo_sprite()
-      , health(4) {
+      , health(chilopoda_app_config::FUNGUS_HEALTH) {
     }
 
-    void init(float x, float y, float w, float h, int _texture = -1, int _health = 4) {
+    void init(float x, float y, float w, float h, int _texture = -1, int _health = chilopoda_app_config::FUNGUS_HEALTH) {
       chilo_sprite::init(x, y, w, h, _texture);
       health = _health;
     }
@@ -381,7 +413,7 @@ namespace octet {
     { }
 
     void init(float x, float y, float w, float h, int _texture = -1,
-      direction_t _direction = direction_right, int _speed = 4) {
+      direction_t _direction = direction_right, int _speed = chilopoda_app_config::WORM_SPEED) {
 
         chilo_sprite::init(x, y, w, h, _texture);
 
@@ -427,15 +459,11 @@ namespace octet {
         setDirection(verticalDirection);
 
         //Try to collide with screen with new direction
-        if (collides_with_screen(
-          fromTilePositionToScreenPosition(0),
-          fromTilePositionToScreenPosition(31), 
-          fromTilePositionToScreenPosition(31),
-          fromTilePositionToScreenPosition(0))) {
-            if (collided_directions & COLLIDE_BOTTOM && verticalDirection == direction_down) {
+        if (collides_with_screen()) {
+            if (collidedDirections & COLLIDE_BOTTOM && verticalDirection == direction_down) {
               verticalDirection = direction_up;
               setDirection(verticalDirection);
-            } else if (collided_directions & COLLIDE_TOP && verticalDirection == direction_up) {
+            } else if (collidedDirections & COLLIDE_TOP && verticalDirection == direction_up) {
               verticalDirection = direction_down;
               setDirection(verticalDirection);
             }
@@ -480,9 +508,10 @@ namespace octet {
     chilo_sprite fireSprite;
     chilo_sprite blamSprite;
     chilo_sprite explosionSprite;
-
     dynarray<chilo_sprite *> fungusSpriteGroup;
     dynarray<chilo_sprite *> wormSpriteGroup;
+
+    //bitmap_font font;
 
     // these objects store pointers to the Group members
     // and they are accessed intensely inside the game loop
@@ -541,9 +570,9 @@ namespace octet {
       } else if (state == state_playing) {
         game_loop_playing(true);
       } else if (state == state_finished_level) {
-        color1.cycleColor(2);
-        color2.cycleColor(2);
-        color3.cycleColor(2);
+        color1.cycle_color(2);
+        color2.cycle_color(2);
+        color3.cycle_color(2);
 
         displayCounter--;
         if (displayCounter == 0) {
@@ -559,7 +588,7 @@ namespace octet {
             resetGame(false);
           } else {
             state = state_game_over;
-            displayCounter = 60*6;
+            displayCounter = 60*chilopoda_app_config::GAME_OVER_DISPLAY_TIME;
           }
         }
       } else if (state == state_game_over) {
@@ -573,19 +602,18 @@ namespace octet {
     void game_loop_playing(bool hasInteraction = true) {
 
       if (hasInteraction) { 
-        // up and down arrow move the right bat
         if (is_key_down(key_up)) {
-          playerSprite.ySpeed = SHIP_SPEED;
+          playerSprite.ySpeed = chilopoda_app_config::SHIP_SPEED;
         } else if (is_key_down(key_down)) {
-          playerSprite.ySpeed = -SHIP_SPEED;
+          playerSprite.ySpeed = -chilopoda_app_config::SHIP_SPEED;
         } else {
           playerSprite.ySpeed = 0;
         }
 
         if (is_key_down(key_left)) {
-          playerSprite.xSpeed = -SHIP_SPEED;
+          playerSprite.xSpeed = -chilopoda_app_config::SHIP_SPEED;
         } else if (is_key_down(key_right)) {
-          playerSprite.xSpeed = SHIP_SPEED;
+          playerSprite.xSpeed = chilopoda_app_config::SHIP_SPEED;
         } else {
           playerSprite.xSpeed = 0;
         }
@@ -595,76 +623,94 @@ namespace octet {
         }
       }
 
-      // Check player collisions
+      check_player_collisions();
+      playerSprite.move();
+
+      move_fire_sprite();
+
+      move_worms(hasInteraction);
+
+      worm_sprite::texFrame = (worm_sprite::texFrame + 1) % 60;
+      if (blamCounter > 0) {
+        blamCounter--;
+        if (blamCounter == 0) {
+          blamSprite.kill();
+        }
+      }
+    }
+
+    void check_player_collisions() {
       for (auto lst = fungiList.begin(); lst != fungiList.end(); ++lst) {
         if (playerSprite.collides_with(**lst)) {
           if (playerSprite.xSpeed > 0 &&
-            (playerSprite.collided_directions & chilo_sprite::COLLIDE_RIGHT)) {
+            (playerSprite.collidedDirections & chilo_sprite::COLLIDE_RIGHT)) {
               playerSprite.xSpeed = 0;
           } else if (playerSprite.xSpeed < 0 &&
-            (playerSprite.collided_directions & chilo_sprite::COLLIDE_LEFT)) {
+            (playerSprite.collidedDirections & chilo_sprite::COLLIDE_LEFT)) {
               playerSprite.xSpeed = 0;
           }
 
           if (playerSprite.ySpeed > 0 &&
-            (playerSprite.collided_directions & chilo_sprite::COLLIDE_TOP)) {
+            (playerSprite.collidedDirections & chilo_sprite::COLLIDE_TOP)) {
               playerSprite.ySpeed = 0;
           } else if (playerSprite.ySpeed < 0 &&
-            (playerSprite.collided_directions & chilo_sprite::COLLIDE_BOTTOM)) {
+            (playerSprite.collidedDirections & chilo_sprite::COLLIDE_BOTTOM)) {
               playerSprite.ySpeed = 0;
           }
         }
       }
 
       if (playerSprite.collides_with_screen(
-        fromTilePositionToScreenPosition(0),
-        fromTilePositionToScreenPosition(31), 
-        fromTilePositionToScreenPosition(5),
-        fromTilePositionToScreenPosition(0))) {
-          if (playerSprite.collided_directions & 
+        from_tile_position_to_screen_position(chilopoda_app_config::MIN_TILE),
+        from_tile_position_to_screen_position(chilopoda_app_config::MAX_TILE), 
+        from_tile_position_to_screen_position(5),
+        from_tile_position_to_screen_position(chilopoda_app_config::MIN_TILE))) {
+          if (playerSprite.collidedDirections & 
             (chilo_sprite::COLLIDE_LEFT | chilo_sprite::COLLIDE_RIGHT)) {
               playerSprite.xSpeed = 0;
           }
-          if (playerSprite.collided_directions & 
+          if (playerSprite.collidedDirections & 
             (chilo_sprite::COLLIDE_TOP | chilo_sprite::COLLIDE_BOTTOM)) {
               playerSprite.ySpeed = 0;
           }
       }
+    }
 
-      playerSprite.move();
-
-      // Moving fire sprite
+    void move_fire_sprite() {
       if (fireSprite.is_enabled()) {
-        fireSprite.y += FIRE_SPEED;
+        fireSprite.y += chilopoda_app_config::FIRE_SPEED;
+        bool collided = false;
         for (auto w = wormList.begin(); w != wormList.end(); ++w) {
-          if (fireSprite.collides_with(**w)) {
+          if (fireSprite.collides_with(**w)) { // Put a new mushroom where body was
             fireSprite.kill();
             play_sound(wormExplodeSound);
 
-            //position for new mushroom
-            float xMushroomTile = fromScreenPositionToTile((*w)->x);
-            float yMushroomTile = fromScreenPositionToTile((*w)->y);
-            float xMushroom = fromTilePositionToScreenPosition(xMushroomTile);
-            float yMushroom = fromTilePositionToScreenPosition(yMushroomTile);
-            //printf("New mushroom in tile coords (%.2f, %.2f), screen coords (%.2f, %.2f).\n", xMushroomTile, yMushroomTile, xMushroom, yMushroom);
-            fungus_sprite *newFungus = static_cast<fungus_sprite *>(getFirstSpriteAvailableFromGroup(fungusSpriteGroup));
-            newFungus->init(xMushroom, yMushroom, 16.0f, 16.0f, mushroom1Tex, 4);
+            float xMushroomTile = from_screen_position_to_tile_position((*w)->x);
+            float yMushroomTile = from_screen_position_to_tile_position((*w)->y);
+            float xMushroom = from_tile_position_to_screen_position(xMushroomTile);
+            float yMushroom = from_tile_position_to_screen_position(yMushroomTile);
+            fungus_sprite *newFungus = static_cast<fungus_sprite *>(get_first_sprite_available_from_group(fungusSpriteGroup));
+            newFungus->init(xMushroom, yMushroom, 16.0f, 16.0f, mushroom1Tex, chilopoda_app_config::FUNGUS_HEALTH);
             fungiList.push_back(newFungus);
 
-            blamCounter = 60*BLAM_DISPLAY_TIME;
+            blamCounter = 60*chilopoda_app_config::BLAM_DISPLAY_TIME;
             blamSprite.init(xMushroom, yMushroom, 16.0f, 16.0f, blamTex);
             (*w)->kill();
             w = wormList.erase(w);
+            collided = true;
+            break;
           }
         }
 
-        int wormSize = 0;
-        for (auto w = wormList.begin(); w != wormList.end(); ++w) {
-          wormSize++;
-        }
-        if (wormSize == 0) {
-          state = state_finished_level;
-          displayCounter = 60*LEVEL_FINISHED_TIME;
+        if (collided) {
+          int wormSize = 0;
+          for (auto w = wormList.begin(); w != wormList.end(); ++w) {
+            wormSize++;
+          }
+          if (wormSize == 0) {
+            state = state_finished_level;
+            displayCounter = 60*chilopoda_app_config::LEVEL_FINISHED_TIME;
+          }
         }
 
         for (auto f = fungiList.begin(); f != fungiList.end(); ++f) {
@@ -680,25 +726,23 @@ namespace octet {
               f = fungiList.erase(f);
             }
             play_sound(mushroomExplodeSound);
+            break;
           }
         }
 
-        if (fireSprite.y >= 270.0f) {
+        if (fireSprite.y >= chilopoda_app_config::SCREEN_SIZE*0.5f+10.0f) {
           fireSprite.kill();
         }
       }
+    }
 
-      // Moving worms
+    void move_worms(bool hasInteraction) {
       for (auto w = wormList.begin(); w != wormList.end(); ++w) {
         worm_sprite *wSprite = *w;
 
         //Collision with screen
-        if (wSprite->collides_with_screen(
-          fromTilePositionToScreenPosition(0),
-          fromTilePositionToScreenPosition(31), 
-          fromTilePositionToScreenPosition(31),
-          fromTilePositionToScreenPosition(0))) {
-            if (wSprite->collided_directions & 
+        if (wSprite->collides_with_screen()) {
+            if (wSprite->collidedDirections & 
               (chilo_sprite::COLLIDE_LEFT | chilo_sprite::COLLIDE_RIGHT)) {
                 wSprite->followVerticalDirection();
             }
@@ -711,12 +755,12 @@ namespace octet {
             wSprite->direction == worm_sprite::direction_right) {
               if (wSprite->collides_with(**f)) {
                 if (wSprite->direction == worm_sprite::direction_left &&
-                  wSprite->collided_directions & chilo_sprite::COLLIDE_LEFT) {
+                  wSprite->collidedDirections & chilo_sprite::COLLIDE_LEFT) {
                     wSprite->followVerticalDirection();
                     break;
                 }
                 if (wSprite->direction == worm_sprite::direction_right &&
-                  wSprite->collided_directions & chilo_sprite::COLLIDE_RIGHT) {
+                  wSprite->collidedDirections & chilo_sprite::COLLIDE_RIGHT) {
                     wSprite->followVerticalDirection();
                     break;
                 }
@@ -726,35 +770,27 @@ namespace octet {
             wSprite->followVerticalDirection();
             worm_sprite::direction_t newDirection = wSprite->direction;
           } 
-        }                  
+        }                
 
         wSprite->move();
 
         if (hasInteraction && playerSprite.collides_with(*wSprite)) {
           playerSprite.kill();
           play_sound(playerDiesSound);
-          displayCounter = 60*PLAYER_DIED_TIME;
+          displayCounter = 60*chilopoda_app_config::PLAYER_DIED_TIME;
           explosionSprite.init(playerSprite.x, playerSprite.y, 29.0f, 15.0f, explosion1Tex);
           state = state_died;
         } else if (!hasInteraction && playerSprite.collides_with(*wSprite)) {
           wSprite->followVerticalDirection();
         }
-        
-      }
 
-      worm_sprite::texFrame = (worm_sprite::texFrame + 1) % 60;
-      if (blamCounter > 0) {
-        blamCounter--;
-        if (blamCounter == 0) {
-          blamSprite.kill();
-        }
       }
     }
 
     /* Returns the first non-enabled sprite from the specified group.
     * If all sprites in group are enabled, function will return NULL.
     */
-    chilo_sprite *getFirstSpriteAvailableFromGroup(dynarray<chilo_sprite *> &group) {
+    chilo_sprite *get_first_sprite_available_from_group(dynarray<chilo_sprite *> &group) {
       for (int i = 0; i != group.size(); i++) {
         if (!group[i]->is_enabled()) {
           chilo_sprite *spr = group[i];
@@ -771,28 +807,18 @@ namespace octet {
       float s = 0.5f + float(rand())/RAND_MAX*0.5f;
       float v = 0.8f;
 
-      color1 = color::fromHSV(h, s, v);
+      color1 = color::from_HSV(h, s, v);
       h += 120.0f;
       if (h > 360.0f) h -= 360.0f;
-      color2 = color::fromHSV(h, s, v);
+      color2 = color::from_HSV(h, s, v);
       h += 120.0f;
       if (h > 360.0f) h -= 360.0f;
-      color3 = color::fromHSV(h, s, v);
+      color3 = color::from_HSV(h, s, v);
     }
 
   public:
 
-    static const int SHIP_SPEED = 4;            // Player speed
-    static const int FIRE_SPEED = 10;           // Bullet speed
-    static const int INITIAL_WORM_SIZE = 10;    // First level worm size, each level one piece is added
-    static const int MAX_WORM_SIZE = 150;       // Maximum worms available in pool
-    static const int INITIAL_FUNGUS_SIZE = 50;  // Initial number of fungi placed in leve
-    static const int MAX_FUNGUS_SIZE = 300;     // Maximum number of fungi in pool
-    static const int WORM_SPEED = 4;            // Worm speed, constant throughout all levels
-
-    static const int PLAYER_DIED_TIME = 3;      // Time in seconds displaying player death before restarting
-    static const int LEVEL_FINISHED_TIME = 3;   // Time in seconds displaying level finished before advancing
-    static const int BLAM_DISPLAY_TIME = 1;     // Time in seconds displaying worm explosion sprite
+    
 
     // this is called when we construct the class
     chilopoda_app(int argc, char **argv)
@@ -813,7 +839,7 @@ namespace octet {
 
       choose_colors();
 
-      cameraToWorld.translate(0, 0, 512.0f/2.0f);
+      cameraToWorld.translate(0, 0, chilopoda_app_config::SCREEN_SIZE*0.5f);
 
       initGame(); 
       resetGame(true);
@@ -848,15 +874,15 @@ namespace octet {
       explosionSprite.init(0, 0, 29.0f, 15.0f, explosion1Tex);
       explosionSprite.kill();
 
-      for (int i = 0; i != MAX_WORM_SIZE; i++) {
+      for (int i = 0; i != chilopoda_app_config::MAX_WORM_SIZE; i++) {
         worm_sprite *w = new worm_sprite;
         w->init(-256.0f+(i%32)*16.0f+8.0f, -32.0f-(16*floor(i/32.0f))+8.0f, 16.0f, 16.0f, monster1Tex);
-        w->speed = WORM_SPEED;
+        w->speed = chilopoda_app_config::WORM_SPEED;
         w->kill();
         wormSpriteGroup.push_back(w);
       }
 
-      for (int i = 0; i != MAX_FUNGUS_SIZE; i++) {
+      for (int i = 0; i != chilopoda_app_config::MAX_FUNGUS_SIZE; i++) {
         fungus_sprite *fung = new fungus_sprite;
         fung->init(-256.0f, -256.0f, 16.0f, 16.0f, mushroom1Tex);
         fung->kill();
@@ -873,7 +899,7 @@ namespace octet {
       state = state_idle;
       score = 0;
       level = 0;
-      lives = 5;
+      lives = chilopoda_app_config::INITIAL_LIVES;
       displayCounter = 0;
       blamCounter = 0;
     }
@@ -881,22 +907,28 @@ namespace octet {
     /* Starts a new game */
     void resetGame(bool resetAll = false) {
       //clear game objects
-      wormList.clean();
+      for (auto w = wormList.begin(); w != wormList.end(); w = wormList.begin()) {
+        (*w)->kill();
+        w = wormList.erase(w);
+      }
 
       if (resetAll) {
         level = 1;
-        fungiList.clean();
+        for (auto f = fungiList.begin(); f != fungiList.end(); f = fungiList.begin()) {
+          (*f)->kill();
+          f = fungiList.erase(f);
+        }
       }
 
       playerSprite.init(0, -200, 16.0f, 16.0f, playerTex);
 
-      for (int i = 0; i != INITIAL_WORM_SIZE+level; i++) {
-        worm_sprite *w = static_cast<worm_sprite *>(getFirstSpriteAvailableFromGroup(wormSpriteGroup));
+      for (int i = 0; i != chilopoda_app_config::INITIAL_WORM_SIZE+level; i++) {
+        worm_sprite *w = static_cast<worm_sprite *>(get_first_sprite_available_from_group(wormSpriteGroup));
         if (!w) {
           printf("ERROR: Out of sprites in wormSpriteGroup.\n");
         }
-        w->init(fromTilePositionToScreenPosition(30.0f-i),
-          fromTilePositionToScreenPosition(32.0f),
+        w->init(from_tile_position_to_screen_position(30.0f-i),
+          from_tile_position_to_screen_position(32.0f),
           16.0f, 16.0f, monster1Tex,
           worm_sprite::direction_right);
         wormList.push_back(w);
@@ -905,20 +937,20 @@ namespace octet {
       worm_sprite::texFrame = 0;
 
       if (resetAll) {
-        for (int i = 0; i != INITIAL_FUNGUS_SIZE; i++) {
-          fungus_sprite *f = static_cast<fungus_sprite *>(getFirstSpriteAvailableFromGroup(fungusSpriteGroup));
+        for (int i = 0; i != chilopoda_app_config::INITIAL_FUNGUS_SIZE; i++) {
+          fungus_sprite *f = static_cast<fungus_sprite *>(get_first_sprite_available_from_group(fungusSpriteGroup));
           float xRandom = floor((float(rand())/RAND_MAX)*31.0f);
           float yRandom = 5.0f + floor((float(rand())/RAND_MAX)*(32.0f-5.0f));
-          f->init(fromTilePositionToScreenPosition(xRandom),
-            fromTilePositionToScreenPosition(yRandom),
-            16.0f, 16.0f, mushroom1Tex, 4);
+          f->init(from_tile_position_to_screen_position(xRandom),
+            from_tile_position_to_screen_position(yRandom),
+            16.0f, 16.0f, mushroom1Tex, chilopoda_app_config::FUNGUS_HEALTH);
           if (!f) {
             printf("ERROR: Out of sprites in fungusSpriteGroup.\n");
           }
           fungiList.push_back(f); 
         }
         score = 0;
-        lives = 5;
+        lives = chilopoda_app_config::INITIAL_LIVES;
       }
       state = state_playing;
       displayCounter = 0;
@@ -946,7 +978,7 @@ namespace octet {
       float c2[3] = {color2.r, color2.g, color2.b};
       float c3[3] = {color3.r, color3.g, color3.b};
 
-      gridSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3, 0.05f);
+      gridSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3, state == state_idle? 0.35f: 0.05f);
       if (playerSprite.is_enabled()) {
         playerSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
       }
@@ -977,10 +1009,10 @@ namespace octet {
 
       if (explosionSprite.is_enabled()) {
         switch (displayCounter) {
-        case 60*PLAYER_DIED_TIME-15: explosionSprite.texture = explosion2Tex; break;
-        case 60*PLAYER_DIED_TIME-30: explosionSprite.texture = explosion3Tex; break;
-        case 60*PLAYER_DIED_TIME-45: explosionSprite.texture = explosion4Tex; break;
-        case 60*PLAYER_DIED_TIME-60: explosionSprite.kill(); break;
+        case 60*chilopoda_app_config::PLAYER_DIED_TIME-15: explosionSprite.texture = explosion2Tex; break;
+        case 60*chilopoda_app_config::PLAYER_DIED_TIME-30: explosionSprite.texture = explosion3Tex; break;
+        case 60*chilopoda_app_config::PLAYER_DIED_TIME-45: explosionSprite.texture = explosion4Tex; break;
+        case 60*chilopoda_app_config::PLAYER_DIED_TIME-60: explosionSprite.kill(); break;
         }
         explosionSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
       }
