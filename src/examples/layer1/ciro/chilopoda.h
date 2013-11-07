@@ -11,7 +11,7 @@ namespace octet {
   
   class chilopoda_app_config {
   public:
-    static const int INITIAL_LIVES = 5;          // Player lives
+    static const int INITIAL_LIVES = 3;          // Player lives
     static const int SHIP_SPEED = 10;            // Player speed
     static const int FIRE_SPEED = 10;            // Bullet speed
     static const int INITIAL_WORM_SIZE = 10;     // First level worm size, each level one piece is added
@@ -21,9 +21,9 @@ namespace octet {
     static const int WORM_SPEED = 4;             // Worm speed, constant throughout all levels
     static const int FUNGUS_HEALTH = 4;          // Fungus initial health
 
-    static const int PLAYER_DIED_TIME = 3;       // Time in seconds displaying player death before restarting
+    static const int PLAYER_DIED_TIME = 2;       // Time in seconds displaying player death before restarting
     static const int LEVEL_FINISHED_TIME = 3;    // Time in seconds displaying level finished before advancing
-    static const int GAME_OVER_DISPLAY_TIME = 5; // Time in seconds displaying game over sign
+    static const int GAME_OVER_DISPLAY_TIME = 3; // Time in seconds displaying game over sign
     static const int BLAM_DISPLAY_TIME = 1;      // Time in seconds displaying worm explosion sprite
 
     // Screen coordinates in game. Change these if changing screen, tile or board dimensions.
@@ -508,6 +508,7 @@ namespace octet {
     chilo_sprite fireSprite;
     chilo_sprite blamSprite;
     chilo_sprite explosionSprite;
+    chilo_sprite gameoverSprite;
     dynarray<chilo_sprite *> fungusSpriteGroup;
     dynarray<chilo_sprite *> wormSpriteGroup;
 
@@ -538,6 +539,7 @@ namespace octet {
     GLuint laserTex;
     GLuint blamTex;
     GLuint gridTex;
+    GLuint gameoverTex;
 
     enum {
       num_sound_sources = 32,
@@ -584,16 +586,31 @@ namespace octet {
         displayCounter--;
         if (displayCounter == 0) {
           lives--;
+          printf("Remaining lives: %d\n", lives);
           if (lives > 0) {
             resetGame(false);
           } else {
             state = state_game_over;
+            color::color_hsv_t hsv1 = color1.to_HSV();
+            color::color_hsv_t hsv2 = color2.to_HSV();
+            color::color_hsv_t hsv3 = color3.to_HSV();
+
+            hsv1.s = hsv2.s = hsv3.s = 0.0f;
+
+            color1 = color::from_HSV(hsv1.h, hsv1.s, hsv1.v);
+            color2 = color::from_HSV(hsv2.h, hsv2.s, hsv2.v);
+            color3 = color::from_HSV(hsv3.h, hsv3.s, hsv3.v);
+
             displayCounter = 60*chilopoda_app_config::GAME_OVER_DISPLAY_TIME;
+            gameoverSprite.init(0, 0, 234.0f, 32.0f, gameoverTex);
           }
         }
       } else if (state == state_game_over) {
         displayCounter--;
         if (displayCounter == 0) {
+          gameoverSprite.kill();
+          resetGame(true);
+          choose_colors();
           state = state_idle;
         }
       }
@@ -864,7 +881,7 @@ namespace octet {
       laserTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Laser.gif");
       blamTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Blam.gif");
       gridTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/grid.gif");
-
+      gameoverTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/gameover.gif");
       gridSprite.init(0, 0, 512, 512, gridTex);
       playerSprite.init(0, -200, 16.0f, 16.0f, playerTex);
       fireSprite.init(0, 0, 3.0f, 10.0f, laserTex);
@@ -873,6 +890,7 @@ namespace octet {
       blamSprite.kill();
       explosionSprite.init(0, 0, 29.0f, 15.0f, explosion1Tex);
       explosionSprite.kill();
+      gameoverSprite.kill();
 
       for (int i = 0; i != chilopoda_app_config::MAX_WORM_SIZE; i++) {
         worm_sprite *w = new worm_sprite;
@@ -983,6 +1001,10 @@ namespace octet {
         playerSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
       }
 
+      for (auto f = fungiList.begin(); f != fungiList.end(); ++f) {
+        (*f)->render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
+      }
+
       for (auto w = wormList.begin(); w != wormList.end(); ++w) {
         switch (worm_sprite::texFrame) {
         case 0: (*w)->texture = monster1Tex; break;
@@ -993,10 +1015,6 @@ namespace octet {
         case 50: (*w)->texture = monster2Tex; break;
         }
         (*w)->render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
-      }
-
-      for (auto f = fungiList.begin(); f != fungiList.end(); ++f) {
-        (*f)->render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
       }
 
       if (fireSprite.is_enabled()) {
@@ -1015,6 +1033,10 @@ namespace octet {
         case 60*chilopoda_app_config::PLAYER_DIED_TIME-60: explosionSprite.kill(); break;
         }
         explosionSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
+      }
+
+      if (gameoverSprite.is_enabled()) {
+        gameoverSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
       }
     }
 
