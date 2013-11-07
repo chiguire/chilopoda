@@ -57,47 +57,37 @@ namespace octet {
     color_hsv_t toHSV() {
       color_hsv_t result;
       
-      float r_ = r;
-      float g_ = g;
-      float b_ = b;
-      float cmax = max(r_, g_, b_);
-      float cmin = min(r_, g_, b_);
+      float min, max, delta;
+
+      min = r < g? r: g;
+      min = min < b? min: b;
+
+      max = r > g? r: g;
+      max = max > b? max: b;
+
+      result.v = max;
+      delta = max - min;
       
-      result.v = cmax;
-      if (result.v == 0) {
-        result.h = result.s = 0;
-        return result;
-      }
-
-      r_ /= result.v;
-      g_ /= result.v;
-      b_ /= result.v;
-
-      cmin = min(r_, g_, b_);
-      cmax = max(r_, g_, b_);
-
-      result.s = cmax - cmin;
-      if (result.s == 0) {
-        result.h = 0;
-        return result;
-      }
-
-      r_ = (r_ - cmin) / result.s;
-      g_ = (g_ - cmin) / result.s;
-      b_ = (b_ - cmin) / result.s;
-
-      cmin = min(r_, g_, b_);
-      cmax = max(r_, g_, b_);
-
-      if (cmax == r_) {
-        result.h = 60.0f*(g_ - b_);
-        if (result.h < 0.0f) {
-          result.h += 360.0f;
-        }
-      } else if (cmax == g_) {
-        result.h = 120.0f + 60.0f*(b_ - r_);
+      if (max > 0.0f) {
+        result.s = (delta / max);
       } else {
-        result.h = 240.0f + 60.0f*(r_ - g_);
+        result.s = 0.0f;
+        result.h = 0.0f;
+        return result;
+      }
+
+      if (r >= max) {
+        result.h = (g - b)/delta;
+      } else if (g >= max) {
+        result.h = 2.0f + (b - r)/delta;
+      } else {
+        result.h = 4.0f + (r - g)/delta;
+      }
+
+      result.h *= 60.0f;
+
+      if (result.h < 0.0f) {
+        result.h += 360.0f;
       }
 
       return result;
@@ -769,8 +759,8 @@ namespace octet {
     }
 
     void choose_colors() {
-      float h = float(rand()/RAND_MAX)*360.0f;
-      float s = 0.5f + float(rand()/RAND_MAX)*0.5f;
+      float h = float(rand())/RAND_MAX*360.0f;
+      float s = 0.5f + float(rand())/RAND_MAX*0.5f;
       float v = 0.8f;
 
       color1 = color::fromHSV(h, s, v);
@@ -951,7 +941,7 @@ namespace octet {
       float c2[3] = {color2.r, color2.g, color2.b};
       float c3[3] = {color3.r, color3.g, color3.b};
 
-      gridSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3, 0.25f);
+      gridSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3, 0.05f);
       if (playerSprite.is_enabled()) {
         playerSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
       }
