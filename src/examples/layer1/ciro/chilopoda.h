@@ -534,9 +534,12 @@ namespace octet {
     // move the objects before drawing
     void simulate() {
       if (state == state_idle) {
-        
+        if (is_key_down(key_space)) {
+          resetGame(true);  
+        }
+        game_loop_playing(false);
       } else if (state == state_playing) {
-        game_loop_playing();
+        game_loop_playing(true);
       } else if (state == state_finished_level) {
         color1.cycleColor(2);
         color2.cycleColor(2);
@@ -546,14 +549,14 @@ namespace octet {
         if (displayCounter == 0) {
           choose_colors();
           level++;
-          resetGame(level);
+          resetGame(false);
         }
       } else if (state == state_died) {
         displayCounter--;
         if (displayCounter == 0) {
           lives--;
           if (lives > 0) {
-            resetGame(level);
+            resetGame(false);
           } else {
             state = state_game_over;
             displayCounter = 60*6;
@@ -567,26 +570,29 @@ namespace octet {
       }
     }
 
-    void game_loop_playing() {
-      // up and down arrow move the right bat
-      if (is_key_down(key_up)) {
-        playerSprite.ySpeed = SHIP_SPEED;
-      } else if (is_key_down(key_down)) {
-        playerSprite.ySpeed = -SHIP_SPEED;
-      } else {
-        playerSprite.ySpeed = 0;
-      }
+    void game_loop_playing(bool hasInteraction = true) {
 
-      if (is_key_down(key_left)) {
-        playerSprite.xSpeed = -SHIP_SPEED;
-      } else if (is_key_down(key_right)) {
-        playerSprite.xSpeed = SHIP_SPEED;
-      } else {
-        playerSprite.xSpeed = 0;
-      }
+      if (hasInteraction) { 
+        // up and down arrow move the right bat
+        if (is_key_down(key_up)) {
+          playerSprite.ySpeed = SHIP_SPEED;
+        } else if (is_key_down(key_down)) {
+          playerSprite.ySpeed = -SHIP_SPEED;
+        } else {
+          playerSprite.ySpeed = 0;
+        }
 
-      if (is_key_down(key_space)) {
-        fire();
+        if (is_key_down(key_left)) {
+          playerSprite.xSpeed = -SHIP_SPEED;
+        } else if (is_key_down(key_right)) {
+          playerSprite.xSpeed = SHIP_SPEED;
+        } else {
+          playerSprite.xSpeed = 0;
+        }
+
+        if (is_key_down(key_space)) {
+          fire();
+        }
       }
 
       // Check player collisions
@@ -724,12 +730,14 @@ namespace octet {
 
         wSprite->move();
 
-        if (playerSprite.collides_with(*wSprite)) {
+        if (hasInteraction && playerSprite.collides_with(*wSprite)) {
           playerSprite.kill();
           play_sound(playerDiesSound);
           displayCounter = 60*PLAYER_DIED_TIME;
           explosionSprite.init(playerSprite.x, playerSprite.y, 29.0f, 15.0f, explosion1Tex);
           state = state_died;
+        } else if (!hasInteraction && playerSprite.collides_with(*wSprite)) {
+          wSprite->followVerticalDirection();
         }
         
       }
@@ -808,7 +816,8 @@ namespace octet {
       cameraToWorld.translate(0, 0, 512.0f/2.0f);
 
       initGame(); 
-      resetGame();
+      resetGame(true);
+      state = state_idle;
     }
 
     /* Initialize game objects, this is initialized once per application */
@@ -870,17 +879,13 @@ namespace octet {
     }
 
     /* Starts a new game */
-    void resetGame(int newLevel = 0) {
+    void resetGame(bool resetAll = false) {
       //clear game objects
-      auto wErase = wormList.begin();
+      wormList.clean();
 
-      while (wErase != wormList.end()) {
-        (*wErase)->kill();
-        wErase = wormList.erase(wErase);
-      }
-
-      if (newLevel == 0) {
+      if (resetAll) {
         level = 1;
+        fungiList.clean();
       }
 
       playerSprite.init(0, -200, 16.0f, 16.0f, playerTex);
@@ -899,7 +904,7 @@ namespace octet {
 
       worm_sprite::texFrame = 0;
 
-      if (newLevel == 0) {
+      if (resetAll) {
         for (int i = 0; i != INITIAL_FUNGUS_SIZE; i++) {
           fungus_sprite *f = static_cast<fungus_sprite *>(getFirstSpriteAvailableFromGroup(fungusSpriteGroup));
           float xRandom = floor((float(rand())/RAND_MAX)*31.0f);

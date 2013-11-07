@@ -120,5 +120,14 @@ namespace octet {
       new_node->prev = head.prev;
       head.prev = new_node;
     }
+
+    void clean() {
+      for (double_list_head *ptr = head.next, *next; ptr != &head; ptr = next) {
+        next = ptr->next;
+        // must return it to the correct pool!
+        delete (double_list_node*)ptr;
+      }
+      head.next = head.prev = &head;
+    }
   };
 }
