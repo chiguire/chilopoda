@@ -509,10 +509,13 @@ namespace octet {
     chilo_sprite blamSprite;
     chilo_sprite explosionSprite;
     chilo_sprite gameoverSprite;
+    dynarray<chilo_sprite> livesGroup;
     dynarray<chilo_sprite *> fungusSpriteGroup;
     dynarray<chilo_sprite *> wormSpriteGroup;
 
-    //bitmap_font font;
+    text_overlay overlay;
+    bump_shader object_shader;
+    bump_shader skin_shader;
 
     // these objects store pointers to the Group members
     // and they are accessed intensely inside the game loop
@@ -586,6 +589,7 @@ namespace octet {
         displayCounter--;
         if (displayCounter == 0) {
           lives--;
+          livesGroup[lives].kill();
           printf("Remaining lives: %d\n", lives);
           if (lives > 0) {
             resetGame(false);
@@ -608,6 +612,9 @@ namespace octet {
       } else if (state == state_game_over) {
         displayCounter--;
         if (displayCounter == 0) {
+          for (int i = 0; i != chilopoda_app_config::INITIAL_LIVES; i++) {
+            livesGroup[i].kill();
+          }
           gameoverSprite.kill();
           resetGame(true);
           choose_colors();
@@ -697,6 +704,8 @@ namespace octet {
       if (fireSprite.is_enabled()) {
         fireSprite.y += chilopoda_app_config::FIRE_SPEED;
         bool collided = false;
+
+        //Collision of fire with any worm
         for (auto w = wormList.begin(); w != wormList.end(); ++w) {
           if (fireSprite.collides_with(**w)) { // Put a new mushroom where body was
             fireSprite.kill();
@@ -715,10 +724,14 @@ namespace octet {
             (*w)->kill();
             w = wormList.erase(w);
             collided = true;
+
+            increase_score(10);
+
             break;
           }
         }
 
+        // Detect level finished
         if (collided) {
           int wormSize = 0;
           for (auto w = wormList.begin(); w != wormList.end(); ++w) {
@@ -730,6 +743,7 @@ namespace octet {
           }
         }
 
+        // Collision of fire with fungi
         for (auto f = fungiList.begin(); f != fungiList.end(); ++f) {
           if (fireSprite.collides_with(**f)) {
             fireSprite.kill();
@@ -740,6 +754,7 @@ namespace octet {
             case 1: (*f)->texture = mushroom4Tex; break;
             } 
             if (!(*f)->is_enabled()) {
+              increase_score(1);
               f = fungiList.erase(f);
             }
             play_sound(mushroomExplodeSound);
@@ -791,6 +806,8 @@ namespace octet {
 
         wSprite->move();
 
+        // Kill player if worm collides.
+        // hasInteraction allows to show a demo screen when state = state_idle
         if (hasInteraction && playerSprite.collides_with(*wSprite)) {
           playerSprite.kill();
           play_sound(playerDiesSound);
@@ -833,10 +850,12 @@ namespace octet {
       color3 = color::from_HSV(h, s, v);
     }
 
+    void increase_score(int scr_) {
+      score += scr_;
+      printf("Score: %d\n", score);
+    }
+
   public:
-
-    
-
     // this is called when we construct the class
     chilopoda_app(int argc, char **argv)
       : app(argc, argv) {
@@ -857,6 +876,8 @@ namespace octet {
       choose_colors();
 
       cameraToWorld.translate(0, 0, chilopoda_app_config::SCREEN_SIZE*0.5f);
+
+      //overlay.init();
 
       initGame(); 
       resetGame(true);
@@ -882,6 +903,7 @@ namespace octet {
       blamTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/Blam.gif");
       gridTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/grid.gif");
       gameoverTex = resources::get_texture_handle(GL_RGBA, "assets/chilopoda/gameover.gif");
+
       gridSprite.init(0, 0, 512, 512, gridTex);
       playerSprite.init(0, -200, 16.0f, 16.0f, playerTex);
       fireSprite.init(0, 0, 3.0f, 10.0f, laserTex);
@@ -891,6 +913,13 @@ namespace octet {
       explosionSprite.init(0, 0, 29.0f, 15.0f, explosion1Tex);
       explosionSprite.kill();
       gameoverSprite.kill();
+
+      for (int i = 0; i != chilopoda_app_config::INITIAL_LIVES; i++) {
+        chilo_sprite lSpr;
+        lSpr.init(-256+10+i*16.0f, 256-10, 12.0f, 12.0f, playerTex);
+        lSpr.kill();
+        livesGroup.push_back(lSpr);
+      }
 
       for (int i = 0; i != chilopoda_app_config::MAX_WORM_SIZE; i++) {
         worm_sprite *w = new worm_sprite;
@@ -969,6 +998,10 @@ namespace octet {
         }
         score = 0;
         lives = chilopoda_app_config::INITIAL_LIVES;
+
+        for (int i = 0; i != lives; i++) {
+          livesGroup[i].init(-256+10+i*16.0f, 256-10, 12.0f, 12.0f, playerTex);
+        }
       }
       state = state_playing;
       displayCounter = 0;
@@ -1038,6 +1071,19 @@ namespace octet {
       if (gameoverSprite.is_enabled()) {
         gameoverSprite.render(texture_palette_shader_, cameraToWorld, c1, c2, c3);
       }
+
+      if (state != state_idle) {
+        for (int i = 0; i != chilopoda_app_config::INITIAL_LIVES; i++) {
+          if (livesGroup[i].is_enabled()) {
+            livesGroup[i].render(texture_palette_shader_, cameraToWorld, c2, c2, c2);
+          }
+        }
+      }
+
+      //int vx = 0, vy = 0;
+      //get_viewport_size(vx, vy);
+
+      //overlay.render(object_shader, skin_shader, vx, vy, get_frame_number());
     }
 
     void fire() {
